@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Farm POS v7.9</title>
+  <title>Farm POS v8.0</title>
   <meta name="description" content="Cooperative Farm Store POS with multi-vendor consignment, role-based access, and peripheral device management">
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
@@ -20,7 +20,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
   
   <script>
-    console.log('[POS] === VERSION 7.9 LOADING ===');
+    console.log('[POS] === VERSION 8.0 LOADING ===');
     
     // Check for URL parameters to set Supabase credentials
     (function() {
@@ -1191,6 +1191,12 @@
         { model: 'Bematech 2x20 VFD', price: 120, connection: 'usb', features: 'Classic pole display, low power' },
         { model: '15" Touch AIO', price: 350, connection: 'hdmi', features: 'Full self-checkout capable' },
       ],
+      nfcReader: [
+        { model: 'ACR122U', price: 35, connection: 'usb', features: 'Best value, MIFARE/NTAG, Web Serial', recommended: true },
+        { model: 'PN532 Module', price: 15, connection: 'serial', features: 'DIY/Raspberry Pi, SPI/I2C/UART' },
+        { model: 'HID Omnikey 5427', price: 85, connection: 'usb', features: 'Commercial grade, dual-freq' },
+        { model: 'uTrust 3700F', price: 60, connection: 'usb', features: 'Desktop, contactless cards' },
+      ],
     };
 
     const PAYMENT_PROCESSORS = [
@@ -1372,6 +1378,9 @@
       const [editingVendor, setEditingVendor] = useState(null);
       const [editingUser, setEditingUser] = useState(null);
       const [editingDevice, setEditingDevice] = useState(null);
+      const [customers, setCustomers] = useState([]);
+      const [editingCustomer, setEditingCustomer] = useState(null);
+      const [nfcReaderStatus, setNfcReaderStatus] = useState({ connected: false, lastCard: null });
       const [showPayment, setShowPayment] = useState(false);
       const [showSettlement, setShowSettlement] = useState(false);
       const [showActiveVendorsOnly, setShowActiveVendorsOnly] = useState(true);
@@ -1558,6 +1567,30 @@
               console.log('[POS] Devices loaded:', loadedDevices.length);
             }
             
+            // Load customers from Supabase
+            console.log('[POS] Fetching customers...');
+            const sbCustomers = await sb.fetchCustomers();
+            if (sbCustomers && sbCustomers.length > 0) {
+              const loadedCustomers = sbCustomers.map(c => ({
+                id: c.id,
+                name: c.name,
+                email: c.email,
+                phone: c.phone,
+                cardUid: c.card_uid,
+                accountType: c.account_type || 'regular',
+                houseAccountBalance: parseFloat(c.house_account_balance) || 0,
+                prepaidBalance: parseFloat(c.prepaid_balance) || 0,
+                discountPercent: parseFloat(c.discount_percent) || 0,
+                doorAccess: c.door_access === true,
+                doorAccessHours: c.door_access_hours,
+                notes: c.notes,
+                active: c.is_active !== false,
+                createdAt: c.created_at
+              }));
+              setCustomers(loadedCustomers);
+              console.log('[POS] Customers loaded:', loadedCustomers.length);
+            }
+            
             console.log('[POS] Initialization complete!');
             
           } catch (err) {
@@ -1691,7 +1724,7 @@
         const [testing, setTesting] = useState(false);
         const [testResult, setTestResult] = useState(null);
         const [showPresets, setShowPresets] = useState(false);
-        const deviceTypes = [{ id: 'scanner', name: 'Barcode Scanner', icon: '📷' }, { id: 'printer', name: 'Receipt Printer', icon: '🖨️' }, { id: 'scale', name: 'Scale', icon: '⚖️' }, { id: 'cashDrawer', name: 'Cash Drawer', icon: '💵' }, { id: 'cardReader', name: 'Card Reader', icon: '💳' }, { id: 'labelPrinter', name: 'Label Printer', icon: '🏷️' }, { id: 'customerDisplay', name: 'Customer Display', icon: '🖥️' }];
+        const deviceTypes = [{ id: 'scanner', name: 'Barcode Scanner', icon: '📷' }, { id: 'printer', name: 'Receipt Printer', icon: '🖨️' }, { id: 'scale', name: 'Scale', icon: '⚖️' }, { id: 'cashDrawer', name: 'Cash Drawer', icon: '💵' }, { id: 'cardReader', name: 'Card Reader', icon: '💳' }, { id: 'labelPrinter', name: 'Label Printer', icon: '🏷️' }, { id: 'customerDisplay', name: 'Customer Display', icon: '🖥️' }, { id: 'nfcReader', name: 'NFC/RFID Reader', icon: '📡' }];
         const presets = HARDWARE_PRESETS[form.type] || [];
         const applyPreset = (preset) => { setForm({ ...form, model: preset.model, connection: preset.connection, name: form.name || deviceTypes.find(d => d.id === form.type)?.name || '' }); setShowPresets(false); };
         
@@ -1955,11 +1988,204 @@
         );
       };
 
+      // CUSTOMER EDIT MODAL
+      const CustomerEditModal = ({ customer, onClose }) => {
+        const [form, setForm] = useState(customer || { 
+          name: '', email: '', phone: '', cardUid: '', 
+          accountType: 'regular', houseAccountBalance: 0, prepaidBalance: 0, 
+          discountPercent: 0, doorAccess: false, doorAccessHours: '', notes: '', active: true 
+        });
+        const [saving, setSaving] = useState(false);
+        const [saveError, setSaveError] = useState(null);
+        
+        const handleSave = async () => {
+          setSaving(true);
+          setSaveError(null);
+          
+          const data = {
+            ...form,
+            id: customer?.id || `cust_${Date.now()}`,
+            houseAccountBalance: parseFloat(form.houseAccountBalance) || 0,
+            prepaidBalance: parseFloat(form.prepaidBalance) || 0,
+            discountPercent: parseFloat(form.discountPercent) || 0
+          };
+          
+          if (dbStatus.connected && dbStatus.tablesExist) {
+            const result = await window.SUPABASE_POS.saveCustomer(data);
+            if (!result.success) {
+              setSaveError(result.error || 'Failed to save');
+              setSaving(false);
+              return;
+            }
+          }
+          
+          // Update local state
+          if (customer?.id) {
+            setCustomers(prev => prev.map(c => c.id === customer.id ? data : c));
+          } else {
+            setCustomers(prev => [...prev, data]);
+          }
+          setSaving(false);
+          onClose();
+        };
+        
+        const handleDelete = async () => {
+          if (!confirm('Delete this customer? This cannot be undone.')) return;
+          setSaving(true);
+          
+          if (dbStatus.connected && dbStatus.tablesExist) {
+            await window.SUPABASE_POS.deleteCustomer(customer.id);
+          }
+          setCustomers(prev => prev.filter(c => c.id !== customer.id));
+          setSaving(false);
+          onClose();
+        };
+        
+        const adjustBalance = (field, amount) => {
+          const current = parseFloat(form[field]) || 0;
+          setForm({ ...form, [field]: (current + amount).toFixed(2) });
+        };
+        
+        return (
+          <div style={styles.modal} onClick={onClose}><div style={{ ...styles.modalContent, maxWidth: '550px' }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 20px', fontSize: '18px' }}>{customer?.id ? '✏️ Edit Customer' : '➕ New Customer'}</h2>
+            {dbStatus.connected && dbStatus.tablesExist && <div style={{ background: '#dcfce7', padding: '8px 12px', borderRadius: '8px', fontSize: '11px', color: '#166534', marginBottom: '12px' }}>✓ Will sync to Supabase</div>}
+            {saveError && <div style={{ background: '#fef2f2', padding: '8px 12px', borderRadius: '8px', fontSize: '11px', color: '#b91c1c', marginBottom: '12px' }}>❌ Error: {saveError}</div>}
+            
+            <div style={{ display: 'grid', gap: '12px' }}>
+              {/* Basic Info */}
+              <input style={styles.input} placeholder="Customer name *" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div><label style={{ fontSize: '11px', color: '#666' }}>Phone</label><input style={styles.input} placeholder="555-123-4567" value={form.phone || ''} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+                <div><label style={{ fontSize: '11px', color: '#666' }}>Email</label><input style={styles.input} placeholder="email@example.com" value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+              </div>
+              
+              {/* NFC Card */}
+              <div style={{ background: '#e0e7ff', padding: '12px', borderRadius: '8px' }}>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: '#4338ca', display: 'block', marginBottom: '6px' }}>💳 NFC Card UID</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input style={{ ...styles.input, flex: 1, fontFamily: 'monospace' }} placeholder="Tap card or enter UID" value={form.cardUid || ''} onChange={e => setForm({ ...form, cardUid: e.target.value })} />
+                  <button type="button" style={{ ...styles.button, background: '#4338ca', color: 'white', fontSize: '10px' }} onClick={() => {
+                    if (nfcReaderStatus.lastCard) { setForm({ ...form, cardUid: nfcReaderStatus.lastCard }); }
+                    else { alert('No card detected. Connect NFC reader and tap a card.'); }
+                  }}>📡 Use Last Card</button>
+                </div>
+                <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>Used for checkout, door access, and balance lookup</div>
+              </div>
+              
+              {/* Account Type & Discount */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div><label style={{ fontSize: '11px', color: '#666' }}>Account Type</label><select style={styles.input} value={form.accountType} onChange={e => setForm({ ...form, accountType: e.target.value })}><option value="regular">Regular</option><option value="member">Member</option><option value="csa">CSA Subscriber</option><option value="vip">VIP</option></select></div>
+                <div><label style={{ fontSize: '11px', color: '#666' }}>Discount %</label><input style={styles.input} type="number" min="0" max="100" value={form.discountPercent || 0} onChange={e => setForm({ ...form, discountPercent: e.target.value })} /></div>
+              </div>
+              
+              {/* Balances */}
+              <div style={{ background: '#fefce8', padding: '12px', borderRadius: '8px' }}>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: '#a16207', display: 'block', marginBottom: '8px' }}>💰 Account Balances</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ fontSize: '10px', color: '#666' }}>Store Card / Prepaid Balance</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <button type="button" style={{ ...styles.button, padding: '4px 8px', fontSize: '10px' }} onClick={() => adjustBalance('prepaidBalance', -10)}>-$10</button>
+                      <input style={{ ...styles.input, textAlign: 'center', fontWeight: '600' }} type="number" step="0.01" value={form.prepaidBalance || 0} onChange={e => setForm({ ...form, prepaidBalance: e.target.value })} />
+                      <button type="button" style={{ ...styles.button, ...styles.primaryBtn, padding: '4px 8px', fontSize: '10px' }} onClick={() => adjustBalance('prepaidBalance', 10)}>+$10</button>
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '10px', color: '#666' }}>House Account (owes)</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <button type="button" style={{ ...styles.button, padding: '4px 8px', fontSize: '10px' }} onClick={() => adjustBalance('houseAccountBalance', -10)}>-$10</button>
+                      <input style={{ ...styles.input, textAlign: 'center', fontWeight: '600' }} type="number" step="0.01" value={form.houseAccountBalance || 0} onChange={e => setForm({ ...form, houseAccountBalance: e.target.value })} />
+                      <button type="button" style={{ ...styles.button, ...styles.dangerBtn, padding: '4px 8px', fontSize: '10px' }} onClick={() => adjustBalance('houseAccountBalance', 10)}>+$10</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Door Access */}
+              <div style={{ background: form.doorAccess ? '#e0e7ff' : '#f8f7f4', padding: '12px', borderRadius: '8px', border: form.doorAccess ? '2px solid #6366f1' : '2px solid transparent' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: form.doorAccess ? '10px' : 0 }}>
+                  <label style={{ fontSize: '12px', fontWeight: '600', color: form.doorAccess ? '#4338ca' : '#666' }}>🚪 Door Access</label>
+                  <button type="button" style={{ ...styles.toggle, background: form.doorAccess ? '#6366f1' : '#ccc' }} onClick={() => setForm({ ...form, doorAccess: !form.doorAccess })}><div style={{ ...styles.toggleKnob, left: form.doorAccess ? '23px' : '3px' }} /></button>
+                </div>
+                {form.doorAccess && (
+                  <div>
+                    <label style={{ fontSize: '10px', color: '#666' }}>Access Hours</label>
+                    <select style={styles.input} value={form.doorAccessHours || '24/7'} onChange={e => setForm({ ...form, doorAccessHours: e.target.value })}>
+                      <option value="24/7">24/7 (Anytime)</option>
+                      <option value="6:00-22:00">6 AM - 10 PM</option>
+                      <option value="8:00-20:00">8 AM - 8 PM</option>
+                      <option value="9:00-17:00">9 AM - 5 PM (Business Hours)</option>
+                      <option value="6:00-18:00">6 AM - 6 PM (Daylight)</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+              
+              {/* Notes */}
+              <div><label style={{ fontSize: '11px', color: '#666' }}>Notes</label><textarea style={{ ...styles.input, minHeight: '60px', resize: 'vertical' }} placeholder="Internal notes about this customer..." value={form.notes || ''} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
+              
+              {/* Active checkbox */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}><input type="checkbox" checked={form.active !== false} onChange={e => setForm({ ...form, active: e.target.checked })} /> Active customer</label>
+              
+              {/* Buttons */}
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                {customer?.id && <button style={{ ...styles.button, ...styles.dangerBtn }} onClick={handleDelete} disabled={saving}>🗑️ Delete</button>}
+                <button style={{ ...styles.button, ...styles.secondaryBtn, flex: 1 }} onClick={onClose}>Cancel</button>
+                <button style={{ ...styles.button, ...styles.primaryBtn, flex: 2 }} onClick={handleSave} disabled={!form.name || saving}>{saving ? 'Saving...' : 'Save Customer'}</button>
+              </div>
+            </div>
+          </div></div>
+        );
+      };
+
       // PAYMENT MODAL
       const PaymentModal = () => {
         const [processing, setProcessing] = useState(false);
-        const completeSale = async (method) => {
+        const [selectedCustomer, setSelectedCustomer] = useState(null);
+        const [customerSearch, setCustomerSearch] = useState('');
+        const [showCustomerLookup, setShowCustomerLookup] = useState(false);
+        
+        // Find customer by phone, name, or card
+        const lookupCustomer = (searchVal) => {
+          const val = searchVal.toLowerCase();
+          return customers.find(c => 
+            c.phone?.includes(val) || 
+            c.name?.toLowerCase().includes(val) || 
+            c.cardUid?.toLowerCase() === val.toLowerCase()
+          );
+        };
+        
+        const completeSale = async (method, customerForPayment = null) => {
           setProcessing(true);
+          
+          // If using store card, verify balance and deduct
+          if (method === 'store_card' && customerForPayment) {
+            if (customerForPayment.prepaidBalance < cartTotal) {
+              alert('Insufficient store card balance! Balance: $' + customerForPayment.prepaidBalance.toFixed(2));
+              setProcessing(false);
+              return;
+            }
+            // Deduct balance
+            const newBalance = customerForPayment.prepaidBalance - cartTotal;
+            const updatedCustomer = { ...customerForPayment, prepaidBalance: newBalance };
+            
+            if (dbStatus.connected && dbStatus.tablesExist) {
+              await window.SUPABASE_POS.saveCustomer(updatedCustomer);
+            }
+            setCustomers(prev => prev.map(c => c.id === customerForPayment.id ? updatedCustomer : c));
+          }
+          
+          // If using house account, add to balance
+          if (method === 'account' && customerForPayment) {
+            const newBalance = (customerForPayment.houseAccountBalance || 0) + cartTotal;
+            const updatedCustomer = { ...customerForPayment, houseAccountBalance: newBalance };
+            
+            if (dbStatus.connected && dbStatus.tablesExist) {
+              await window.SUPABASE_POS.saveCustomer(updatedCustomer);
+            }
+            setCustomers(prev => prev.map(c => c.id === customerForPayment.id ? updatedCustomer : c));
+          }
           
           // Save to Supabase if connected
           if (dbStatus.connected && dbStatus.tablesExist) {
@@ -1967,14 +2193,16 @@
               transaction_num: `TX${Date.now()}`,
               subtotal: cartTotal, tax_amount: 0, total: cartTotal,
               payment_method: method, status: 'completed',
-              cashier_id: user.id, is_kiosk: view === 'kiosk'
+              cashier_id: user.id, is_kiosk: view === 'kiosk',
+              customer_id: customerForPayment?.id || null
             };
             const items = cart.map(item => ({
               product_id: item.id, vendor_id: item.vendorId,
               quantity: item.quantity, unit_price: item.price,
               line_total: item.total, commission_rate: item.commissionRate,
               commission_amt: item.total * (item.commissionRate / 100),
-              is_weight: item.isWeight
+              is_weight: item.isWeight,
+              unit_cost: item.cost || null
             }));
             await window.SUPABASE_POS.saveTransaction(tx, items);
           }
@@ -1988,13 +2216,16 @@
               name: item.name, 
               vendorId: item.vendorId, 
               quantity: item.quantity, 
-              price: item.price, 
+              price: item.price,
+              cost: item.cost,
               total: item.total,
               commissionAmt: item.total * (item.commissionRate / 100)
             })), 
             paymentMethod: method, 
             total: cartTotal, 
-            cashier: user.name 
+            cashier: user.name,
+            customerId: customerForPayment?.id,
+            customerName: customerForPayment?.name
           };
           TRANSACTIONS.push(newTx);
           setTransactions(prev => [...prev, newTx]);
@@ -2002,13 +2233,103 @@
           for (const item of cart) { for (const cat of Object.keys(PRODUCTS)) { const idx = PRODUCTS[cat].findIndex(p => p.id === item.id); if (idx >= 0) { PRODUCTS[cat][idx].stock = Math.max(0, PRODUCTS[cat][idx].stock - (item.isWeight ? 1 : item.quantity)); break; } } }
           setProducts({ ...PRODUCTS }); setCart([]); setProcessing(false); setShowPayment(false);
         };
+        
+        // Calculate discount if customer selected
+        const customerDiscount = selectedCustomer?.discountPercent || 0;
+        const discountAmount = cartTotal * (customerDiscount / 100);
+        const finalTotal = cartTotal - discountAmount;
+        
         return (
-          <div style={styles.modal} onClick={() => !processing && setShowPayment(false)}><div style={{ ...styles.modalContent, maxWidth: '450px' }} onClick={e => e.stopPropagation()}>
+          <div style={styles.modal} onClick={() => !processing && setShowPayment(false)}><div style={{ ...styles.modalContent, maxWidth: '480px' }} onClick={e => e.stopPropagation()}>
             <h2 style={{ margin: '0 0 16px', fontSize: '18px' }}>💳 Complete Sale</h2>
             {dbStatus.connected && dbStatus.tablesExist && <div style={{ background: '#dcfce7', padding: '8px 12px', borderRadius: '8px', fontSize: '11px', color: '#166534', marginBottom: '12px' }}>✓ Transaction will sync to Supabase</div>}
-            <div style={{ marginBottom: '16px' }}>{Object.entries(cartByVendor).map(([vendorId, data]) => (<div key={vendorId} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', marginBottom: '4px', background: '#f8f7f4', borderRadius: '6px', borderLeft: `3px solid ${data.vendor?.color || '#666'}` }}><span style={{ fontSize: '12px' }}>{data.vendor?.name}</span><span style={{ fontWeight: '600', fontSize: '13px' }}>${data.subtotal.toFixed(2)}</span></div>))}</div>
-            <div style={{ fontSize: '28px', fontWeight: '700', color: '#0f6e56', textAlign: 'center', marginBottom: '20px', padding: '16px', background: '#f0fdf4', borderRadius: '10px' }}>${cartTotal.toFixed(2)}</div>
-            <div style={{ display: 'grid', gap: '8px', marginBottom: '16px' }}><button style={{ ...styles.button, ...styles.primaryBtn, padding: '14px' }} onClick={() => completeSale('card')} disabled={processing}>{processing ? 'Processing...' : '💳 Card'}</button><button style={{ ...styles.button, ...styles.secondaryBtn, padding: '14px' }} onClick={() => completeSale('cash')} disabled={processing}>💵 Cash</button></div>
+            
+            {/* Customer Lookup */}
+            <div style={{ background: '#f8f7f4', padding: '12px', borderRadius: '8px', marginBottom: '12px' }}>
+              <div style={{ fontSize: '11px', fontWeight: '600', marginBottom: '8px', color: '#666' }}>👤 Customer (optional)</div>
+              {selectedCustomer ? (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#e0e7ff', padding: '10px', borderRadius: '6px' }}>
+                  <div>
+                    <div style={{ fontWeight: '600', fontSize: '13px', color: '#4338ca' }}>{selectedCustomer.name}</div>
+                    <div style={{ fontSize: '10px', color: '#666' }}>
+                      {selectedCustomer.prepaidBalance > 0 && <span style={{ marginRight: '8px' }}>💰 Store Card: ${selectedCustomer.prepaidBalance.toFixed(2)}</span>}
+                      {selectedCustomer.discountPercent > 0 && <span style={{ color: '#0f6e56' }}>-{selectedCustomer.discountPercent}% discount</span>}
+                    </div>
+                  </div>
+                  <button style={{ ...styles.button, ...styles.secondaryBtn, padding: '4px 8px', fontSize: '10px' }} onClick={() => setSelectedCustomer(null)}>✕ Clear</button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <input style={{ ...styles.input, flex: 1, fontSize: '12px' }} placeholder="Phone, name, or tap NFC card..." value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} onKeyPress={e => {
+                    if (e.key === 'Enter') {
+                      const found = lookupCustomer(customerSearch);
+                      if (found) { setSelectedCustomer(found); setCustomerSearch(''); }
+                      else { alert('Customer not found'); }
+                    }
+                  }} />
+                  <button style={{ ...styles.button, ...styles.secondaryBtn, fontSize: '10px' }} onClick={() => {
+                    const found = lookupCustomer(customerSearch);
+                    if (found) { setSelectedCustomer(found); setCustomerSearch(''); }
+                    else { alert('Customer not found'); }
+                  }}>🔍</button>
+                  {nfcReaderStatus.lastCard && <button style={{ ...styles.button, background: '#6366f1', color: 'white', fontSize: '10px' }} onClick={() => {
+                    const found = customers.find(c => c.cardUid === nfcReaderStatus.lastCard);
+                    if (found) { setSelectedCustomer(found); }
+                    else { alert('Card not registered to a customer'); }
+                  }}>📡 Use Card</button>}
+                </div>
+              )}
+            </div>
+            
+            {/* Order Summary */}
+            <div style={{ marginBottom: '12px' }}>{Object.entries(cartByVendor).map(([vendorId, data]) => (<div key={vendorId} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', marginBottom: '4px', background: '#f8f7f4', borderRadius: '6px', borderLeft: `3px solid ${data.vendor?.color || '#666'}` }}><span style={{ fontSize: '12px' }}>{data.vendor?.name}</span><span style={{ fontWeight: '600', fontSize: '13px' }}>${data.subtotal.toFixed(2)}</span></div>))}</div>
+            
+            {/* Total with discount */}
+            <div style={{ padding: '16px', background: '#f0fdf4', borderRadius: '10px', marginBottom: '16px' }}>
+              {customerDiscount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '8px' }}>
+                  <span>Subtotal:</span><span>${cartTotal.toFixed(2)}</span>
+                </div>
+              )}
+              {customerDiscount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#0f6e56', marginBottom: '8px' }}>
+                  <span>Member Discount ({customerDiscount}%):</span><span>-${discountAmount.toFixed(2)}</span>
+                </div>
+              )}
+              <div style={{ fontSize: '28px', fontWeight: '700', color: '#0f6e56', textAlign: 'center' }}>${finalTotal.toFixed(2)}</div>
+            </div>
+            
+            {/* Payment Buttons */}
+            <div style={{ display: 'grid', gap: '8px', marginBottom: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <button style={{ ...styles.button, ...styles.primaryBtn, padding: '14px' }} onClick={() => completeSale('card', selectedCustomer)} disabled={processing}>{processing ? 'Processing...' : '💳 Card'}</button>
+                <button style={{ ...styles.button, ...styles.secondaryBtn, padding: '14px' }} onClick={() => completeSale('cash', selectedCustomer)} disabled={processing}>💵 Cash</button>
+              </div>
+              
+              {/* Store Card - only if customer selected with balance */}
+              {selectedCustomer && selectedCustomer.prepaidBalance >= finalTotal && (
+                <button style={{ ...styles.button, background: '#f59e0b', color: 'white', padding: '14px' }} onClick={() => completeSale('store_card', selectedCustomer)} disabled={processing}>
+                  🎁 Store Card (${selectedCustomer.prepaidBalance.toFixed(2)} available)
+                </button>
+              )}
+              {selectedCustomer && selectedCustomer.prepaidBalance > 0 && selectedCustomer.prepaidBalance < finalTotal && (
+                <div style={{ fontSize: '11px', color: '#dc2626', textAlign: 'center', padding: '8px', background: '#fef2f2', borderRadius: '6px' }}>
+                  ⚠️ Store card balance (${selectedCustomer.prepaidBalance.toFixed(2)}) insufficient for this purchase
+                </div>
+              )}
+              
+              {/* House Account - only if customer selected */}
+              {selectedCustomer && (
+                <button style={{ ...styles.button, background: '#6366f1', color: 'white', padding: '12px', fontSize: '12px' }} onClick={() => {
+                  if (confirm(`Charge $${finalTotal.toFixed(2)} to ${selectedCustomer.name}'s house account?`)) {
+                    completeSale('account', selectedCustomer);
+                  }
+                }} disabled={processing}>
+                  🏠 House Account {selectedCustomer.houseAccountBalance > 0 ? `(owes $${selectedCustomer.houseAccountBalance.toFixed(2)})` : ''}
+                </button>
+              )}
+            </div>
+            
             <button style={{ ...styles.button, ...styles.dangerBtn, width: '100%' }} onClick={() => setShowPayment(false)} disabled={processing}>Cancel</button>
           </div></div>
         );
@@ -2153,7 +2474,7 @@
         const testDbConnection = async () => { setTestingDb(true); await new Promise(r => setTimeout(r, 1500)); setLocalSettings(s => ({ ...s, dbConnected: true, dbLastSync: new Date().toISOString() })); setTestingDb(false); };
         const testFarmosConnection = async () => { setTestingFarmos(true); await new Promise(r => setTimeout(r, 1500)); setLocalSettings(s => ({ ...s, farmosStatus: s.farmosUrl ? 'connected' : 'disconnected', farmosLastSync: new Date().toISOString() })); setTestingFarmos(false); };
 
-        const adminSections = [{ id: 'store', label: '🏪 Store' }, { id: 'users', label: '👥 Users' }, { id: 'devices', label: '🔌 Devices' }, { id: 'payments', label: '💳 Payments' }, { id: 'transactions', label: '🧾 Transactions' }, { id: 'import', label: '📥 Import' }, { id: 'database', label: '🗄️ Database' }, { id: 'farmos', label: '🌱 farmOS' }];
+        const adminSections = [{ id: 'store', label: '🏪 Store' }, { id: 'users', label: '👥 Users' }, { id: 'customers', label: '🧑‍🤝‍🧑 Customers' }, { id: 'door', label: '🚪 Door Access' }, { id: 'devices', label: '🔌 Devices' }, { id: 'payments', label: '💳 Payments' }, { id: 'transactions', label: '🧾 Transactions' }, { id: 'import', label: '📥 Import' }, { id: 'database', label: '🗄️ Database' }, { id: 'farmos', label: '🌱 farmOS' }];
 
         return (
           <div style={{ padding: '16px', maxWidth: '1000px', margin: '0 auto' }}>
@@ -2164,7 +2485,148 @@
 
             {adminSection === 'users' && (<div style={styles.card}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}><h3 style={{ margin: 0, fontSize: '15px' }}>👥 User Management</h3><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={() => setEditingUser({})}>➕ Add User</button></div><div style={{ display: 'grid', gap: '8px' }}>{users.map(u => (<div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8f7f4', borderRadius: '8px', cursor: 'pointer' }} onClick={() => setEditingUser(u)}><div><div style={{ fontWeight: '600', fontSize: '13px' }}>{u.name}</div><div style={{ fontSize: '11px', color: '#666' }}>@{u.username} • {u.email || 'No email'}</div></div><div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ padding: '3px 10px', borderRadius: '10px', fontSize: '10px', fontWeight: '600', background: u.role === 'admin' ? '#fef3c7' : u.role === 'manager' ? '#e0e7ff' : '#f0fdf4', color: u.role === 'admin' ? '#92400e' : u.role === 'manager' ? '#4338ca' : '#166534' }}>{u.role}</span>{!u.active && <span style={{ padding: '3px 8px', borderRadius: '10px', fontSize: '9px', background: '#fef2f2', color: '#b91c1c' }}>Inactive</span>}</div></div>))}</div></div>)}
 
-            {adminSection === 'devices' && (<div style={styles.card}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}><h3 style={{ margin: 0, fontSize: '15px' }}>🔌 Peripheral Devices</h3><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={() => setEditingDevice({})}>➕ Add Device</button></div><div style={{ display: 'grid', gap: '8px' }}>{devices.map(device => { const icons = { scanner: '📷', printer: '🖨️', scale: '⚖️', cashDrawer: '💵', cardReader: '💳', labelPrinter: '🏷️', customerDisplay: '🖥️' }; return (<div key={device.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderRadius: '10px', border: `2px solid ${device.status === 'connected' ? '#22c55e' : '#f59e0b'}`, background: device.enabled ? 'white' : '#f9fafb', opacity: device.enabled ? 1 : 0.7, cursor: 'pointer' }} onClick={() => setEditingDevice(device)}><div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><span style={{ fontSize: '24px' }}>{icons[device.type]}</span><div><div style={{ fontWeight: '600', fontSize: '13px' }}>{device.name}</div><div style={{ fontSize: '10px', color: '#666' }}>{device.model} • {device.connection.toUpperCase()}</div></div></div><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><span style={{ padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: '600', background: device.status === 'connected' ? '#dcfce7' : '#fef3c7', color: device.status === 'connected' ? '#166534' : '#92400e' }}>{device.status}</span></div></div>); })}</div></div>)}
+            {adminSection === 'customers' && (<div style={styles.card}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ margin: 0, fontSize: '15px' }}>🧑‍🤝‍🧑 Customer Accounts</h3>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input style={{ ...styles.input, width: '180px' }} placeholder="🔍 Search by phone/name..." id="customerSearch" onKeyPress={e => {
+                    if (e.key === 'Enter') {
+                      const val = e.target.value.toLowerCase();
+                      const found = customers.find(c => c.phone?.includes(val) || c.name?.toLowerCase().includes(val) || c.cardUid?.toLowerCase().includes(val));
+                      if (found) { setEditingCustomer(found); e.target.value = ''; }
+                      else { alert('Customer not found'); }
+                    }
+                  }} />
+                  <button style={{ ...styles.button, ...styles.primaryBtn }} onClick={() => setEditingCustomer({})}>➕ Add Customer</button>
+                </div>
+              </div>
+              <div style={{ fontSize: '11px', color: '#666', marginBottom: '12px' }}>{customers.length} customer(s) • Tap NFC card to look up or link</div>
+              
+              {/* NFC Reader Status */}
+              <div style={{ padding: '12px', borderRadius: '8px', background: nfcReaderStatus.connected ? '#dcfce7' : '#f8f7f4', marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: '600', fontSize: '12px', color: nfcReaderStatus.connected ? '#166534' : '#666' }}>
+                    {nfcReaderStatus.connected ? '✓ NFC Reader Connected' : '○ NFC Reader Not Connected'}
+                  </div>
+                  {nfcReaderStatus.lastCard && <div style={{ fontSize: '10px', color: '#666' }}>Last card: {nfcReaderStatus.lastCard}</div>}
+                </div>
+                <button style={{ ...styles.button, ...styles.secondaryBtn, fontSize: '10px' }} onClick={async () => {
+                  if (window.NFC_RFID.connected) {
+                    await window.NFC_RFID.disconnect();
+                    setNfcReaderStatus({ connected: false, lastCard: null });
+                  } else {
+                    const result = await window.NFC_RFID.connect();
+                    if (result.success) {
+                      setNfcReaderStatus({ connected: true, lastCard: null });
+                      window.NFC_RFID.onCardRead = (uid) => {
+                        setNfcReaderStatus(prev => ({ ...prev, lastCard: uid }));
+                        const customer = customers.find(c => c.cardUid === uid);
+                        if (customer) { setEditingCustomer(customer); }
+                        else if (confirm('Card not registered. Create new customer with this card?')) { setEditingCustomer({ cardUid: uid }); }
+                      };
+                    } else { alert('Failed to connect: ' + result.error); }
+                  }
+                }}>{nfcReaderStatus.connected ? '🔌 Disconnect' : '📡 Connect NFC'}</button>
+              </div>
+              
+              <div style={{ display: 'grid', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
+                {customers.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>No customers yet. Add your first customer!</div>
+                ) : customers.map(c => (
+                  <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8f7f4', borderRadius: '8px', cursor: 'pointer', border: c.doorAccess ? '2px solid #6366f1' : '2px solid transparent' }} onClick={() => setEditingCustomer(c)}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: c.accountType === 'member' ? '#6366f1' : c.accountType === 'csa' ? '#0f6e56' : '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: '600', fontSize: '14px' }}>{c.name?.charAt(0).toUpperCase() || '?'}</div>
+                      <div>
+                        <div style={{ fontWeight: '600', fontSize: '13px' }}>{c.name} {c.cardUid && <span style={{ fontSize: '10px', color: '#6366f1' }}>💳</span>}</div>
+                        <div style={{ fontSize: '11px', color: '#666' }}>{c.phone || c.email || 'No contact'}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <span style={{ padding: '3px 8px', borderRadius: '10px', fontSize: '9px', fontWeight: '600', background: c.accountType === 'member' ? '#e0e7ff' : c.accountType === 'csa' ? '#dcfce7' : '#f1f5f9', color: c.accountType === 'member' ? '#4338ca' : c.accountType === 'csa' ? '#166534' : '#475569' }}>{c.accountType}</span>
+                      {c.prepaidBalance > 0 && <span style={{ padding: '3px 8px', borderRadius: '10px', fontSize: '9px', fontWeight: '600', background: '#fef3c7', color: '#92400e' }}>💰 ${c.prepaidBalance.toFixed(2)}</span>}
+                      {c.houseAccountBalance !== 0 && <span style={{ padding: '3px 8px', borderRadius: '10px', fontSize: '9px', fontWeight: '600', background: c.houseAccountBalance > 0 ? '#fef2f2' : '#dcfce7', color: c.houseAccountBalance > 0 ? '#b91c1c' : '#166534' }}>{c.houseAccountBalance > 0 ? 'Owes' : 'Credit'} ${Math.abs(c.houseAccountBalance).toFixed(2)}</span>}
+                      {c.doorAccess && <span style={{ padding: '3px 8px', borderRadius: '10px', fontSize: '9px', fontWeight: '600', background: '#e0e7ff', color: '#4338ca' }}>🚪 Access</span>}
+                      {c.discountPercent > 0 && <span style={{ fontSize: '10px', color: '#0f6e56' }}>-{c.discountPercent}%</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>)}
+
+            {adminSection === 'door' && (<div style={styles.card}>
+              <h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>🚪 Door Access Control</h3>
+              
+              <div style={{ display: 'grid', gap: '12px' }}>
+                {/* Door Status */}
+                <div style={{ padding: '16px', borderRadius: '10px', background: '#f0fdf4', border: '2px solid #86efac' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: '700', fontSize: '16px', color: '#166534' }}>🔒 Door Status: Locked</div>
+                      <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Last access: None recorded</div>
+                    </div>
+                    <button style={{ ...styles.button, background: '#dc2626', color: 'white' }} onClick={() => {
+                      if (confirm('Manually unlock door for 10 seconds?')) {
+                        window.DOOR_ACCESS.unlock(10000);
+                        alert('Door unlocked for 10 seconds');
+                      }
+                    }}>🔓 Manual Unlock</button>
+                  </div>
+                </div>
+                
+                {/* Access Statistics */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                  <div style={{ padding: '16px', borderRadius: '10px', background: '#f8f7f4', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#0f6e56' }}>{customers.filter(c => c.doorAccess).length}</div>
+                    <div style={{ fontSize: '11px', color: '#666' }}>Active Access Cards</div>
+                  </div>
+                  <div style={{ padding: '16px', borderRadius: '10px', background: '#f8f7f4', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#6366f1' }}>{customers.filter(c => c.doorAccess && c.doorAccessHours === '24/7').length}</div>
+                    <div style={{ fontSize: '11px', color: '#666' }}>24/7 Access</div>
+                  </div>
+                  <div style={{ padding: '16px', borderRadius: '10px', background: '#f8f7f4', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#f59e0b' }}>{customers.filter(c => c.doorAccess && c.doorAccessHours && c.doorAccessHours !== '24/7').length}</div>
+                    <div style={{ fontSize: '11px', color: '#666' }}>Limited Hours</div>
+                  </div>
+                </div>
+                
+                {/* Customers with Door Access */}
+                <div>
+                  <div style={{ fontWeight: '600', fontSize: '13px', marginBottom: '10px' }}>Customers with Door Access</div>
+                  <div style={{ display: 'grid', gap: '6px', maxHeight: '300px', overflowY: 'auto' }}>
+                    {customers.filter(c => c.doorAccess).length === 0 ? (
+                      <div style={{ padding: '20px', textAlign: 'center', color: '#888', background: '#f8f7f4', borderRadius: '8px' }}>No customers have door access enabled. Edit a customer to grant access.</div>
+                    ) : customers.filter(c => c.doorAccess).map(c => (
+                      <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#f8f7f4', borderRadius: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{ fontSize: '18px' }}>🚪</span>
+                          <div>
+                            <div style={{ fontWeight: '600', fontSize: '12px' }}>{c.name}</div>
+                            <div style={{ fontSize: '10px', color: '#666' }}>{c.cardUid ? '💳 ' + c.cardUid.substring(0, 11) + '...' : 'No card linked'}</div>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ padding: '3px 8px', borderRadius: '10px', fontSize: '9px', fontWeight: '600', background: c.doorAccessHours === '24/7' ? '#dcfce7' : '#fef3c7', color: c.doorAccessHours === '24/7' ? '#166534' : '#92400e' }}>{c.doorAccessHours || '24/7'}</span>
+                          <button style={{ ...styles.button, ...styles.secondaryBtn, padding: '4px 8px', fontSize: '9px' }} onClick={() => { setAdminSection('customers'); setEditingCustomer(c); }}>Edit</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Hardware Setup Guide */}
+                <div style={{ background: '#f0f9ff', padding: '12px', borderRadius: '8px', fontSize: '11px', color: '#0369a1' }}>
+                  <strong>🔧 Hardware Setup:</strong>
+                  <ul style={{ margin: '8px 0 0 16px', paddingLeft: '0' }}>
+                    <li>ACR122U or PN532 NFC reader for card scanning</li>
+                    <li>Electric strike or mag lock with relay</li>
+                    <li>Raspberry Pi or ESP32 for door controller</li>
+                    <li>Same NFC cards work for POS checkout and door access</li>
+                  </ul>
+                </div>
+              </div>
+            </div>)}
+
+            {adminSection === 'devices' && (<div style={styles.card}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}><h3 style={{ margin: 0, fontSize: '15px' }}>🔌 Peripheral Devices</h3><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={() => setEditingDevice({})}>➕ Add Device</button></div><div style={{ display: 'grid', gap: '8px' }}>{devices.map(device => { const icons = { scanner: '📷', printer: '🖨️', scale: '⚖️', cashDrawer: '💵', cardReader: '💳', labelPrinter: '🏷️', customerDisplay: '🖥️', nfcReader: '📡' }; return (<div key={device.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderRadius: '10px', border: `2px solid ${device.status === 'connected' ? '#22c55e' : '#f59e0b'}`, background: device.enabled ? 'white' : '#f9fafb', opacity: device.enabled ? 1 : 0.7, cursor: 'pointer' }} onClick={() => setEditingDevice(device)}><div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><span style={{ fontSize: '24px' }}>{icons[device.type] || '🔌'}</span><div><div style={{ fontWeight: '600', fontSize: '13px' }}>{device.name}</div><div style={{ fontSize: '10px', color: '#666' }}>{device.model} • {device.connection.toUpperCase()}</div></div></div><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><span style={{ padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: '600', background: device.status === 'connected' ? '#dcfce7' : '#fef3c7', color: device.status === 'connected' ? '#166534' : '#92400e' }}>{device.status}</span></div></div>); })}</div></div>)}
 
             {adminSection === 'payments' && (<div style={styles.card}><h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>💳 Payment Processing</h3><div style={{ display: 'grid', gap: '12px' }}><div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Select Payment Processor</div><div style={{ display: 'grid', gap: '8px' }}>{PAYMENT_PROCESSORS.map(proc => (<div key={proc.id} onClick={() => setLocalSettings({ ...localSettings, paymentProcessor: proc.id })} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px', borderRadius: '10px', border: localSettings.paymentProcessor === proc.id ? '2px solid #0f6e56' : '2px solid #e0ddd5', cursor: 'pointer', background: localSettings.paymentProcessor === proc.id ? '#f0fdf4' : 'white' }}><div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><span style={{ fontSize: '24px' }}>{proc.logo}</span><div><div style={{ fontWeight: '600', fontSize: '14px' }}>{proc.name} {proc.recommended && <span style={{ color: '#0f6e56', fontSize: '12px' }}>★ Recommended</span>}</div><div style={{ fontSize: '11px', color: '#666' }}>{proc.features}</div></div></div><div style={{ textAlign: 'right' }}><div style={{ fontWeight: '700', color: '#0f6e56' }}>{proc.rate}</div><div style={{ fontSize: '10px', color: '#888' }}>per transaction</div></div></div>))}</div><div style={{ borderTop: '1px solid #eee', paddingTop: '12px', marginTop: '4px' }}><h4 style={{ margin: '0 0 10px', fontSize: '13px' }}>API Configuration</h4><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>API Key / Secret Key</label><input style={styles.input} type="password" placeholder={`${localSettings.paymentProcessor} API key`} value={localSettings.paymentApiKey} onChange={e => setLocalSettings({ ...localSettings, paymentApiKey: e.target.value })} /></div><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', marginTop: '10px' }}><input type="checkbox" checked={localSettings.paymentTestMode} onChange={e => setLocalSettings({ ...localSettings, paymentTestMode: e.target.checked })} /> Test Mode (no real charges)</label></div><div style={{ background: '#f0f9ff', padding: '12px', borderRadius: '8px', fontSize: '11px', color: '#0369a1' }}><strong>💡 Recommended for Self-Service:</strong> Stripe Terminal M2 ($59) - tap/chip/swipe, Bluetooth, best API for unattended payments.</div><button style={{ ...styles.button, ...styles.primaryBtn, marginTop: '8px' }} onClick={saveAdminSettings} disabled={adminSaving}>{adminSaving ? 'Saving...' : '💾 Save Payment Settings'}</button></div></div>)}
 
@@ -2473,6 +2935,7 @@
           {editingVendor !== null && <VendorEditModal vendor={editingVendor.id ? editingVendor : null} onClose={() => setEditingVendor(null)} />}
           {editingUser !== null && <UserEditModal userToEdit={editingUser.id ? editingUser : null} onClose={() => setEditingUser(null)} />}
           {editingDevice !== null && <DeviceEditModal deviceToEdit={editingDevice.id ? editingDevice : null} onClose={() => setEditingDevice(null)} />}
+          {editingCustomer !== null && <CustomerEditModal customer={editingCustomer.id ? editingCustomer : null} onClose={() => setEditingCustomer(null)} />}
           {showPayment && <PaymentModal />}
           {showSettlement && <SettlementModal />}
         </div>
