@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FarmHack Admin — Supabase Setup</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+:root {
+  --bg:      #0d0d0d;
+  --surface: #161616;
+  --card:    #1e1e1e;
+  --border:  #2a2a2a;
+  --accent:  #f0c060;
+  --green:   #4caf50;
+  --red:     #ef5350;
+  --blue:    #42a5f5;
+  --text:    #e8e8e8;
+  --muted:   #888;
+  --radius:  10px;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* ── Layout ── */
+.page-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 32px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.logo { font-size: 20px; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 10px; }
+.badge { font-size: 10px; background: var(--card); border: 1px solid var(--border);
+         border-radius: 4px; padding: 2px 8px; color: var(--muted); font-weight: 600;
+         letter-spacing: .06em; text-transform: uppercase; }
+.layout { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 57px); }
+.sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 20px 0; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 20px;
+            font-size: 13px; cursor: pointer; color: var(--muted); border-left: 3px solid transparent;
+            transition: all .15s; }
+.nav-item:hover { color: var(--text); background: rgba(255,255,255,.03); }
+.nav-item.active { color: var(--accent); border-left-color: var(--accent); background: rgba(240,192,96,.05); }
+.nav-icon { font-size: 15px; width: 18px; text-align: center; }
+.main { padding: 32px; max-width: 900px; }
+
+/* ── Cards ── */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+        padding: 24px; margin-bottom: 20px; }
+.card-header { display: flex; align-items: center; justify-content: space-between;
+               margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.card-title { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+.section-desc { font-size: 13px; color: var(--muted); margin-bottom: 24px; line-height: 1.5; }
+
+/* ── Form controls ── */
+label { display: block; font-size: 11px; font-weight: 700; letter-spacing: .06em;
+        color: var(--muted); text-transform: uppercase; margin-bottom: 5px; }
+input, select, textarea {
+  width: 100%; padding: 10px 14px; background: #111; border: 1px solid var(--border);
+  border-radius: 7px; color: var(--text); font-size: 13px; outline: none;
+  transition: border-color .15s;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+.field { margin-bottom: 16px; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.hint { font-size: 11px; color: var(--muted); margin-top: 5px; line-height: 1.4; }
+code { background: #111; border: 1px solid var(--border); border-radius: 4px;
+       padding: 1px 6px; font-size: 11px; font-family: 'SF Mono',monospace; color: #aef; }
+
+/* ── Buttons ── */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px;
+       border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer;
+       border: none; transition: opacity .15s; }
+.btn:hover { opacity: .85; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #111; }
+.btn-secondary { background: var(--card); border: 1px solid var(--border); color: var(--text); }
+.btn-danger  { background: var(--red); color: #fff; }
+.btn-green   { background: var(--green); color: #fff; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+
+/* ── Status indicators ── */
+.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+.dot-ok  { background: var(--green); }
+.dot-err { background: var(--red); }
+.dot-off { background: var(--muted); }
+.dot-busy { background: var(--accent); animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+.status-row { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 8px 0;
+              border-bottom: 1px solid var(--border); }
+.status-row:last-child { border-bottom: none; }
+.status-label { color: var(--muted); flex: 1; }
+
+/* ── Tables ── */
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .05em;
+     color: var(--muted); text-transform: uppercase; padding: 8px 12px;
+     border-bottom: 1px solid var(--border); }
+td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.04); vertical-align: middle; }
+tr:hover td { background: rgba(255,255,255,.02); }
+
+/* ── Role badges ── */
+.role-badge { display: inline-block; padding: 2px 9px; border-radius: 10px;
+              font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.role-super_admin { background: #5b21b6; color: #fff; }
+.role-admin    { background: #c45a10; color: #fff; }
+.role-manager  { background: #1a6634; color: #fff; }
+.role-member   { background: #1a4a8a; color: #fff; }
+.role-guest    { background: #444; color: #aaa; }
+.role-pending  { background: #333; color: #888; }
+
+/* ── Alert boxes ── */
+.alert { padding: 12px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 16px;
+         display: flex; align-items: flex-start; gap: 10px; }
+.alert-info    { background: rgba(66,165,245,.1); border: 1px solid rgba(66,165,245,.3); color: #90caf9; }
+.alert-success { background: rgba(76,175,80,.1);  border: 1px solid rgba(76,175,80,.3);  color: #a5d6a7; }
+.alert-warning { background: rgba(240,192,96,.1); border: 1px solid rgba(240,192,96,.3); color: var(--accent); }
+.alert-danger  { background: rgba(239,83,80,.1);  border: 1px solid rgba(239,83,80,.3);  color: #ef9a9a; }
+
+/* ── Log output ── */
+.log-box { background: #0a0a0a; border: 1px solid var(--border); border-radius: 7px;
+           padding: 12px 16px; font-family: 'SF Mono',monospace; font-size: 12px;
+           max-height: 200px; overflow-y: auto; color: #888; }
+.log-ok  { color: #6fcf97; }
+.log-err { color: #eb5757; }
+.log-info { color: #56ccf2; }
+
+/* ── Tab nav ── */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+.tab  { padding: 9px 18px; font-size: 13px; cursor: pointer; color: var(--muted);
+        border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+/* ── Schema view ── */
+pre { background: #0a0a0a; border: 1px solid var(--border); border-radius: 8px;
+      padding: 16px; font-size: 12px; overflow-x: auto; color: #aaa;
+      font-family: 'SF Mono', monospace; white-space: pre; line-height: 1.6; }
+
+/* ── Responsive ── */
+@media (max-width: 700px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .main { padding: 20px; }
+  .row, .row3 { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <div class="logo">🌾 FarmHack Admin <span class="badge">v1</span></div>
+  <div id="auth-status" style="font-size:12px;color:var(--muted)">⚪ Not connected</div>
+</header>
+
+<div class="layout">
+  <nav class="sidebar">
+    <div class="nav-item active" onclick="showPage('credentials')" id="nav-credentials">
+      <span class="nav-icon">🔑</span> Credentials
+    </div>
+    <div class="nav-item" onclick="showPage('status')" id="nav-status">
+      <span class="nav-icon">📡</span> Connection Status
+    </div>
+    <div class="nav-item" onclick="showPage('members')" id="nav-members">
+      <span class="nav-icon">👥</span> Members & Roles
+    </div>
+    <div class="nav-item" onclick="showPage('documents')" id="nav-documents">
+      <span class="nav-icon">📄</span> Signed Documents
+    </div>
+    <div class="nav-item" onclick="showPage('schema')" id="nav-schema">
+      <span class="nav-icon">🗄️</span> Schema / SQL
+    </div>
+    <div class="nav-item" onclick="showPage('selfhost')" id="nav-selfhost">
+      <span class="nav-icon">🖥️</span> Self-Hosted Setup
+    </div>
+    <div class="nav-item" onclick="showPage('media')" id="nav-media">
+      <span class="nav-icon">🎥</span> Media Hosting
+    </div>
+    <div class="nav-item" onclick="showPage('pos')" id="nav-pos">
+      <span class="nav-icon">🏪</span> Farm Store POS
+    </div>
+    <div style="margin-top:20px;padding:0 20px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#333;margin-bottom:8px">Sites</div>
+    </div>
+    <div class="nav-item" onclick="openSite('farm-pos-v4.html')">
+      <span class="nav-icon">🛒</span> POS System
+    </div>
+    <div class="nav-item" onclick="openSite('tuckaway-coop-barn.html')">
+      <span class="nav-icon">🐴</span> Barn / Coop
+    </div>
+    <div class="nav-item" onclick="openSite('wentworth-hunt-kennels.html')">
+      <span class="nav-icon">🦊</span> WWH Kennels
+    </div>
+    <div class="nav-item" onclick="openSite('tuckaway-farm-hunters.html')">
+      <span class="nav-icon">🦌</span> Hunters
+    </div>
+  </nav>
+
+  <div class="main" id="main-content">
+    <!-- pages rendered by JS -->
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// FarmHack Admin — single-file admin panel
+// ══════════════════════════════════════════════════════════════════
+
+var CRED_KEY = 'farmhack-supabase-v1';
+var _sb = null;
+var _currentPage = 'credentials';
+
+function getCreds(){ try{ return JSON.parse(localStorage.getItem(CRED_KEY))||{}; }catch(_){ return {}; } }
+function saveCreds(url,key){ localStorage.setItem(CRED_KEY, JSON.stringify({url:url.trim().replace(/\/$/,''), anonKey:key.trim()})); }
+
+function esc(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+// ── Connect to Supabase ───────────────────────────────────────────
+function connect(){
+  var creds = getCreds();
+  if(!creds.url || !creds.anonKey){ updateAuthStatus(false, 'No credentials saved'); return; }
+  _sb = supabase.createClient(creds.url, creds.anonKey);
+  _sb.auth.getSession().then(function(r){
+    var session = r.data && r.data.session;
+    if(session){
+      updateAuthStatus(true, session.user.email);
+    } else {
+      updateAuthStatus(false, 'Credentials loaded — sign in to test');
+    }
+  }).catch(function(e){ updateAuthStatus(false, e.message); });
+}
+
+function updateAuthStatus(ok, msg){
+  var el = document.getElementById('auth-status');
+  if(el) el.innerHTML = '<span class="status-dot '+(ok?'dot-ok':'dot-off')+'"></span> ' + esc(msg||'');
+}
+
+// ── Navigation ────────────────────────────────────────────────────
+function showPage(name){
+  _currentPage = name;
+  document.querySelectorAll('.nav-item').forEach(function(el){ el.classList.remove('active'); });
+  var nav = document.getElementById('nav-'+name);
+  if(nav) nav.classList.add('active');
+  var main = document.getElementById('main-content');
+  var pages = { credentials: pageCreds, status: pageStatus, members: pageMembers,
+                documents: pageDocs, schema: pageSchema, selfhost: pageSelfHost, media: pageMedia, pos: pagePOS };
+  if(pages[name]) main.innerHTML = pages[name]();
+  else main.innerHTML = '<p style="color:var(--muted)">Page not found.</p>';
+  initPage(name);
+}
+
+function openSite(f){ window.open(f,'_blank'); }
+
+// ─────────────────────────────────────────────────────────────────
+// PAGE: Credentials
+// ─────────────────────────────────────────────────────────────────
+function pageCreds(){
+  var c = getCreds();
+  return [
+'<h2>🔑 Supabase Credentials</h2>',
+'<p class="section-desc">These credentials are stored in your browser\'s localStorage and shared with all three farm sites. You only need to enter them once per device.</p>',
+
+'<div class="alert alert-info">',
+'<div>',
+'<strong>Where to find your credentials:</strong><br>',
+'Go to <strong>supabase.com</strong> → open your project → <strong>Settings → API</strong>. ',
+'You need the <em>Project URL</em> and the <em>anon / public key</em> only. ',
+'Never put your <em>service_role</em> key in any browser page.',
+'</div>',
+'</div>',
+
+'<div class="card">',
+'<div class="card-header"><div class="card-title">📡 Project Credentials</div></div>',
+
+'<div class="field">',
+'<label>Project URL</label>',
+'<input id="sb-url" value="'+esc(c.url||'')+'" placeholder="https://abcdefghijklm.supabase.co">',
+'<div class="hint">Found at <strong>Settings → API → Project URL</strong></div>',
+'</div>',
+
+'<div class="field">',
+'<label>Anon / Public Key</label>',
+'<input id="sb-key" type="password" value="'+esc(c.anonKey||'')+'" placeholder="eyJhbGci...">',
+'<div class="hint">Settings → API → Project API Keys → <strong>anon public</strong> (safe for browser)</div>',
+'</div>',
+
+'<div class="field">',
+'<label>Redirect URL <span style="font-weight:400;text-transform:none;color:#666;font-size:11px">(required when opening files directly via file://)</span></label>',
+'<input id="sb-redirect" value="'+esc(c.redirectTo||'')+'" placeholder="http://localhost:8080/tuckaway-coop-barn.html">',
+'<div class="hint">',
+'Where Supabase sends users after clicking their magic link. ',
+'If you open HTML files directly (file://) this <strong>must</strong> be set. ',
+'If you serve files via <code>python3 -m http.server 8080</code> use <code>http://localhost:8080/filename.html</code>. ',
+'Must also be added to Supabase → Authentication → URL Configuration → Redirect URLs.',
+'</div>',
+'</div>',
+
+'<div style="display:flex;gap:10px;flex-wrap:wrap">',
+'<button class="btn btn-primary" onclick="saveAndTest()">Save & Test Connection</button>',
+'<button class="btn btn-secondary" onclick="clearCreds()">Clear Credentials</button>',
+'</div>',
+'<div id="creds-result" style="margin-top:16px"></div>',
+'</div>',
+
+'<div class="card">',
+'<div class="card-header"><div class="card-title">🔐 What Each Key Does</div></div>',
+'<div style="font-size:13px;line-height:1.7;color:var(--muted)">',
+'<table>',
+'<tr><th>Key</th><th>Safe in browser?</th><th>Use</th></tr>',
+'<tr><td><code>Project URL</code></td><td style="color:var(--green)">✓ Yes</td><td>API endpoint — always public</td></tr>',
+'<tr><td><code>anon public</code></td><td style="color:var(--green)">✓ Yes</td><td>User-facing reads/writes, gated by Row Level Security</td></tr>',
+'<tr><td><code>service_role</code></td><td style="color:var(--red)">✗ Never</td><td>Admin operations — bypasses all RLS — server/CLI only</td></tr>',
+'<tr><td><code>JWT Secret</code></td><td style="color:var(--red)">✗ Never</td><td>Token signing — server only</td></tr>',
+'</table>',
+'</div>',
+'</div>',
+
+'<div class="card" style="border-left:4px solid #ef5350">',
+'<div class="card-header"><div class="card-title">🔗 Supabase Authentication URL Configuration</div></div>',
+'<div style="font-size:13px;color:var(--muted);line-height:1.9;margin-bottom:16px">',
+'Supabase needs to know what URL to redirect to after the user clicks their magic link. ',
+'By default it sends users to <code>localhost:3000</code> which does not exist.',
+'</div>',
+'<div style="display:flex;flex-direction:column;gap:12px">',
+'<div style="background:#111;border-radius:8px;padding:14px">',
+'<div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:#666;margin-bottom:8px">STEP 1 — Set Site URL</div>',
+'<div style="font-size:12px;color:#ccc;line-height:1.7">',
+'Supabase dashboard → <strong style=\"color:#eee\">Authentication → URL Configuration</strong><br>',
+'Change <strong>Site URL</strong> to where you serve your files:<br>',
+'<code style=\"display:block;margin:5px 0;padding:6px 10px;background:#0a0a0a;border-radius:4px\">' +
+'http://localhost:8080</code>',
+'(or your production domain, e.g. <code>https://farm.yourdomain.com</code>)',
+'</div>',
+'</div>',
+'<div style="background:#111;border-radius:8px;padding:14px">',
+'<div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:#666;margin-bottom:8px">STEP 2 — Add Redirect URLs</div>',
+'<div style="font-size:12px;color:#ccc;line-height:1.7">',
+'In the same screen, under <strong style=\"color:#eee\">Redirect URLs</strong>, add a wildcard for your server:<br>',
+'<code style=\"display:block;margin:5px 0;padding:6px 10px;background:#0a0a0a;border-radius:4px\">' +
+'http://localhost:8080/**</code>',
+'This allows any of the three farm sites (barn, kennel, hunters) to receive the magic link callback.',
+'</div>',
+'</div>',
+'<div style="background:#111;border-radius:8px;padding:14px">',
+'<div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:#666;margin-bottom:8px">STEP 3 — Serve your HTML files over HTTP</div>',
+'<div style="font-size:12px;color:#ccc;line-height:1.7">',
+'Open a terminal in the folder that contains your farm HTML files and run:<br>',
+'<code style=\"display:block;margin:5px 0;padding:6px 10px;background:#0a0a0a;border-radius:4px\">' +
+'python3 -m http.server 8080</code>',
+'Then open the sites via <code>http://localhost:8080/tuckaway-coop-barn.html</code> etc.<br>',
+'Leave the terminal running while using the sites. The server only runs on your local machine.',
+'</div>',
+'</div>',
+'</div>',
+'<div style="margin-top:14px;font-size:12px;color:var(--muted)">',
+'If you open the files directly (file://) Supabase cannot redirect back to them. ',
+'The HTTP server is the simplest fix — it is just Python, requires nothing installed.',
+'</div>',
+'</div>',
+
+'<div class="card">',
+'<div class="card-header"><div class="card-title">📋 Setup Checklist</div></div>',
+'<div style="font-size:13px;line-height:2;color:var(--muted)">',
+'<div>① Create a free Supabase project at <strong style="color:var(--text)">supabase.com</strong></div>',
+'<div>② Go to SQL Editor → New query → paste the contents of <code>supabase-schema.sql</code> → Run</div>',
+'<div>③ Go to Authentication → Email → enable "Magic Link" (disable "Email Confirm" for testing)</div>',
+'<div>④ Go to Storage → enable the storage feature (buckets are created by the schema)</div>',
+'<div>⑤ Paste your URL + anon key above and click Save & Test</div>',
+'<div>⑥ Open any farm site — it will automatically use the same saved credentials</div>',
+'</div>',
+'</div>',
+  ].join('');
+}
+
+function saveAndTest(){
+  var url      = document.getElementById('sb-url').value.trim();
+  var key      = document.getElementById('sb-key').value.trim();
+  var redirect = document.getElementById('sb-redirect') ? document.getElementById('sb-redirect').value.trim() : '';
+  if(!url||!key){ showResult('creds-result','Both URL and anon key are required.','err'); return; }
+  // Save all three including optional redirectTo
+  var creds = { url: url.replace(/\/$/,''), anonKey: key };
+  if(redirect) creds.redirectTo = redirect;
+  localStorage.setItem('farmhack-supabase-v1', JSON.stringify(creds));
+  _sb = supabase.createClient(url,key);
+  showResult('creds-result','Connecting…','info');
+  _sb.from('site_config').select('*').limit(1)
+    .then(function(r){
+      if(r.error){
+        showResult('creds-result','Connected but query failed: '+r.error.message+' — Did you run the schema SQL?','err');
+        updateAuthStatus(false,'Creds OK, schema missing?');
+      } else {
+        showResult('creds-result','✓ Connected! Database tables accessible. ('+(r.data?r.data.length:0)+' site_config rows found)','ok');
+        updateAuthStatus(true,'Connected — schema OK');
+      }
+    }).catch(function(e){ showResult('creds-result','Connection error: '+e.message,'err'); });
+}
+
+function clearCreds(){
+  if(!confirm('Clear saved credentials from this browser?')) return;
+  localStorage.removeItem(CRED_KEY);
+  localStorage.removeItem('farmhack-profile-cache');
+  showPage('credentials');
+}
+
+// ─────────────────────────────────────────────────────────────────
+// PAGE: Connection Status
+// ─────────────────────────────────────────────────────────────────
+function pageStatus(){
+  return [
+'<h2>📡 Connection Status</h2>',
+'<p class="section-desc">Live health check of your Supabase backend and all connected services.</p>',
+'<div class="card">',
+'<div class="card-header"><div class="card-title">Database Tables</div><button class="btn btn-secondary btn-sm" onclick="runStatusCheck()">Refresh</button></div>',
+'<div id="status-rows">',
+statusRow('site_config', 'pending'),
+statusRow('profiles', 'pending'),
+statusRow('documents', 'pending'),
+statusRow('media', 'pending'),
+statusRow('invitations', 'pending'),
+statusRow('audit_log', 'pending'),
+'</div>',
+'</div>',
+'<div class="card">',
+'<div class="card-header"><div class="card-title">Storage Buckets</div></div>',
+'<div id="bucket-rows">',
+statusRow('farm-media', 'pending'),
+statusRow('farm-docs', 'pending'),
+statusRow('farm-public', 'pending'),
+'</div>',
+'</div>',
+'<div class="card">',
+'<div class="card-header"><div class="card-title">Auth Settings</div></div>',
+'<div id="auth-rows">',
+'<div class="status-row"><span class="status-label">Magic Link (OTP) auth</span>',
+'<span id="status-auth-magic" class="dot-busy status-dot"></span>',
+'<span id="status-auth-magic-txt" style="font-size:12px;color:var(--muted)">Checking…</span></div>',
+'</div>',
+'</div>',
+  ].join('');
+}
+
+function statusRow(name, state){
+  var dot = state==='ok'?'dot-ok':state==='err'?'dot-err':state==='pending'?'dot-busy':'dot-off';
+  return '<div class="status-row" id="row-'+name+'"><span class="status-label">'+name+'</span>'+
+         '<span class="status-dot '+dot+'" id="dot-'+name+'"></span>'+
+         '<span id="txt-'+name+'" style="font-size:12px;color:var(--muted)">'+
+         (state==='pending'?'Checking…':state)+'</span></div>';
+}
+
+function runStatusCheck(){
+  if(!_sb){ showPage('status'); return; }
+  ['site_config','profiles','documents','media','invitations','audit_log'].forEach(function(tbl){
+    _sb.from(tbl).select('*',{count:'exact',head:true}).then(function(r){
+      var dot = document.getElementById('dot-'+tbl);
+      var txt = document.getElementById('txt-'+tbl);
+      if(!dot) return;
+      if(r.error){ dot.className='status-dot dot-err'; txt.textContent='Error: '+r.error.message; }
+      else { dot.className='status-dot dot-ok'; txt.textContent='✓ '+r.count+' rows'; }
+    });
+  });
+  // Buckets
+  _sb.storage.listBuckets().then(function(r){
+    var buckets = (r.data||[]).map(function(b){ return b.id||b.name; });
+    ['farm-media','farm-docs','farm-public'].forEach(function(b){
+      var dot = document.getElementById('dot-'+b);
+      var txt = document.getElementById('txt-'+b);
+      if(!dot) return;
+      if(buckets.indexOf(b)>=0){ dot.className='status-dot dot-ok'; txt.textContent='✓ Exists'; }
+      else { dot.className='status-dot dot-err'; txt.textContent='Missing — run schema SQL'; }
+    });
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// PAGE: Members & Roles
+// ─────────────────────────────────────────────────────────────────
+function pageMembers(){
+  return [
+'<h2>👥 Members & Roles</h2>',
+'<p class="section-desc">Manage user accounts and role assignments across all farm sites. Users sign in via magic link; you approve and assign roles here.</p>',
+'<div class="card">',
+'<div class="card-header"><div class="card-title">All Members</div>',
+'<button class="btn btn-primary btn-sm" onclick="loadMembers()">Refresh</button></div>',
+'<div id="members-table"><div style="color:var(--muted);font-size:13px">Click Refresh to load members.</div></div>',
+'</div>',
+'<div class="card">',
+'<div class="card-header"><div class="card-title">Role Definitions</div></div>',
+'<table>',
+'<tr><th>Role</th><th>What they can do</th></tr>',
+'<tr><td><span class="role-badge role-super_admin">super_admin</span></td><td style="font-size:12px;color:var(--muted)">Full access all sites + billing + manage other admins</td></tr>',
+'<tr><td><span class="role-badge role-admin">admin</span></td><td style="font-size:12px;color:var(--muted)">Edit all data, manage members/roles, run farmOS sync, backup/restore</td></tr>',
+'<tr><td><span class="role-badge role-manager">manager</span></td><td style="font-size:12px;color:var(--muted)">Edit animals, chores, notes, events; run farmOS sync</td></tr>',
+'<tr><td><span class="role-badge role-member">member</span></td><td style="font-size:12px;color:var(--muted)">Log chores, add notes, view all data, sign documents</td></tr>',
+'<tr><td><span class="role-badge role-guest">guest</span></td><td style="font-size:12px;color:var(--muted)">View-only access</td></tr>',
+'<tr><td><span class="role-badge role-pending">pending</span></td><td style="font-size:12px;color:var(--muted)">Signed up but not yet approved — no access</td></tr>',
+'</table>',
+'<div style="margin-top:16px;font-size:12px;color:var(--muted)">',
+'Per-site role overrides: a user\'s global role applies to all sites unless you set a site-specific override in their profile\'s <code>site_access</code> JSON, e.g. <code>{"barn":"manager","kennel":"member"}</code>',
+'</div>',
+'</div>',
+  ].join('');
+}
+
+function loadMembers(){
+  if(!_sb){ showResult('members-table','Not connected — save credentials first.','err'); return; }
+  document.getElementById('members-table').innerHTML = '<div style="color:var(--muted);font-size:13px">Loading…</div>';
+  _sb.from('profiles').select('*').order('created_at').then(function(r){
+    if(r.error||!r.data.length){
+      document.getElementById('members-table').innerHTML =
+        r.error ? '<div style="color:var(--red)">'+esc(r.error.message)+'</div>'
+                : '<div style="color:var(--muted);font-size:13px">No members yet. Users appear here after their first sign-in.</div>';
+      return;
+    }
+    var rows = r.data.map(function(p){
+      return '<tr>'+
+        '<td><strong>'+esc(p.full_name||p.display_name||'—')+'</strong><br><span style="font-size:11px;color:var(--muted)">'+esc(p.email)+'</span></td>'+
+        '<td><span class="role-badge role-'+esc(p.role)+'">'+esc(p.role)+'</span></td>'+
+        '<td style="font-size:11px;color:var(--muted)">'+esc(p.member_type||'—')+'</td>'+
+        '<td style="font-size:11px;color:var(--muted)">'+esc(p.created_at?p.created_at.split('T')[0]:'')+'</td>'+
+        '<td><select onchange="changeRole(\''+p.id+'\',this.value)" style="width:auto;padding:4px 8px;font-size:12px">'+
+        ['pending','guest','member','manager','admin','super_admin'].map(function(r2){
+          return '<option value="'+r2+'"'+(p.role===r2?' selected':'')+'>'+r2+'</option>';
+        }).join('')+
+        '</select></td>'+
+        '</tr>';
+    }).join('');
+    document.getElementById('members-table').innerHTML =
+      '<table><tr><th>Name / Email</th><th>Role</th><th>Type</th><th>Joined</th><th>Change Role</th></tr>'+rows+'</table>';
+  });
+}
+
+function changeRole(userId, newRole){
+  if(!_sb) return;
+  _sb.from('profiles').update({ role: newRole }).eq('id', userId)
+    .then(function(r){
+      if(r.error) alert('Error: '+r.error.message);
+      else { loadMembers(); }
+    });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// PAGE: Signed Documents
+// ─────────────────────────────────────────────────────────────────
+function pageDocs(){
+  return [
+'<h2>📄 Signed Documents</h2>',
+'<p class="section-desc">Waivers, releases, and boarding agreements signed across all sites. Docs are stored in Supabase and mirrored locally in each member\'s browser.</p>',
+'<div class="card">',
+'<div class="card-header"><div class="card-title">Document Archive</div>',
+'<button class="btn btn-primary btn-sm" onclick="loadDocs()">Load</button></div>',
+'<div id="docs-table"><div style="color:var(--muted);font-size:13px">Click Load to show signed documents.</div></div>',
+'</div>',
+  ].join('');
+}
+
+function loadDocs(){
+  if(!_sb){ document.getElementById('docs-table').innerHTML='<div style="color:var(--red)">Not connected.</div>'; return; }
+  document.getElementById('docs-table').innerHTML = '<div style="color:var(--muted)">Loading…</div>';
+  _sb.from('documents').select('*, profiles(full_name,email)').order('signed_at',{ascending:false}).limit(100)
+    .then(function(r){
+      if(r.error||!r.data.length){
+        document.getElementById('docs-table').innerHTML = r.error
+          ? '<div style="color:var(--red)">'+esc(r.error.message)+'</div>'
+          : '<div style="color:var(--muted)">No documents yet.</div>';
+        return;
+      }
+      var rows = r.data.map(function(d){
+        var who = d.profiles ? (d.profiles.full_name||d.profiles.email) : d.user_id.substr(0,8)+'…';
+        return '<tr>'+
+          '<td>'+esc(who)+'</td>'+
+          '<td style="font-size:11px">'+esc(d.doc_type.replace(/_/g,' '))+'</td>'+
+          '<td style="font-size:11px;color:var(--muted)">'+esc(d.site)+'</td>'+
+          '<td style="font-size:11px;color:var(--muted)">'+esc(d.season||'—')+'</td>'+
+          '<td style="font-size:11px">'+esc(d.signed_at?d.signed_at.split('T')[0]:'')+'</td>'+
+          '<td>'+(d.is_valid?'<span style="color:var(--green)">✓ Valid</span>':'<span style="color:var(--red)">Voided</span>')+'</td>'+
+          '</tr>';
+      }).join('');
+      document.getElementById('docs-table').innerHTML =
+        '<table><tr><th>Signer</th><th>Document</th><th>Site</th><th>Season</th><th>Signed</th><th>Status</th></tr>'+rows+'</table>';
+    });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// PAGE: Schema / SQL
+// ─────────────────────────────────────────────────────────────────
+function pageSchema(){
+  return [
+'<h2>🗄️ Database Schema</h2>',
+'<p class="section-desc">Copy and run this SQL in your Supabase SQL Editor to create all tables, storage buckets, RLS policies, and seed data.</p>',
+'<div class="alert alert-warning">',
+'<div>Run this <strong>once</strong> in a fresh Supabase project. Re-running is safe — statements use <code>IF NOT EXISTS</code> and <code>ON CONFLICT DO NOTHING</code>.</div>',
+'</div>',
+'<div class="card" style="padding:0">',
+'<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">',
+'<span style="font-size:13px;font-weight:600">supabase-schema.sql</span>',
+'<button class="btn btn-primary btn-sm" onclick="copySchema()">Copy SQL</button>',
+'</div>',
+'<pre id="schema-pre" style="max-height:500px;border:none;border-radius:0 0 '+
+'var(--radius) var(--radius)">'+esc(SCHEMA_SQL)+'</pre>',
+'</div>',
+'<div id="copy-msg" style="margin-top:12px"></div>',
+  ].join('');
+}
+
+function copySchema(){
+  navigator.clipboard.writeText(SCHEMA_SQL).then(function(){
+    showResult('copy-msg','✓ SQL copied to clipboard — paste into Supabase SQL Editor','ok');
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// PAGE: Self-Hosted Setup
+// ─────────────────────────────────────────────────────────────────
+function pageSelfHost(){
+  return [
+'<h2>🖥️ Self-Hosted / FarmHack-in-a-Box</h2>',
+'<p class="section-desc">Run the full FarmHack stack on a local server — Raspberry Pi 5 or similar — with optional cloud mirroring.</p>',
+
+'<div class="alert alert-info"><div>',
+'<strong>Architecture:</strong> Each FarmHack node runs <strong>Supabase self-hosted</strong> (Docker Compose), <strong>Gitea</strong> for code/docs versioning, and <strong>farmOS</strong> behind a reverse proxy. ',
+'Nodes sync to each other and optionally to supabase.com cloud for off-farm backup.',
+'</div></div>',
+
+'<div class="card">',
+'<div class="card-header"><div class="card-title">🍓 Minimum Hardware: Raspberry Pi 5 Node</div></div>',
+'<table><tr><th>Component</th><th>Spec</th><th>Why</th></tr>',
+'<tr><td>Board</td><td>Raspberry Pi 5 8GB</td><td>Enough RAM for farmOS + Supabase + Gitea</td></tr>',
+'<tr><td>Storage</td><td>1 TB NVMe via PCIe HAT</td><td>Fast DB + media storage; SD cards fail</td></tr>',
+'<tr><td>UPS</td><td>PiJuice or CyberPower 425VA</td><td>Protects DB writes during power loss</td></tr>',
+'<tr><td>Network</td><td>Ethernet + WiFi AP (Pi5 built-in)</td><td>Serves local network even without internet</td></tr>',
+'<tr><td>Case</td><td>IP54 enclosure or DIN-rail mount</td><td>Barn dust, humidity</td></tr>',
+'</table>',
+'</div>',
+
+'<div class="card">',
+'<div class="card-header"><div class="card-title">📦 Software Stack (Docker Compose)</div></div>',
+'<pre>'+esc(
+`# farmhack-compose.yml — runs on any Linux arm64/amd64
+services:
+  supabase-db:      # PostgreSQL 15 + pgvector
+    image: supabase/postgres:15.1.1.73
+    volumes: [./data/postgres:/var/lib/postgresql/data]
+    environment: [POSTGRES_PASSWORD=\${DB_PASS}]
+
+  supabase-api:     # PostgREST — REST API over Postgres
+    image: postgrest/postgrest:v11.2.0
+
+  supabase-auth:    # GoTrue — magic link / JWT auth
+    image: supabase/gotrue:v2.143.0
+    environment:
+      GOTRUE_MAILER_SMTP_HOST: \${SMTP_HOST}
+      GOTRUE_MAILER_SMTP_PORT: 587
+      GOTRUE_SMTP_USER: \${SMTP_USER}
+
+  supabase-storage: # S3-compatible object storage (files/media)
+    image: supabase/storage-api:v0.46.4
+    volumes: [./data/storage:/var/lib/storage]
+
+  supabase-realtime: # Websocket events
+    image: supabase/realtime:v2.28.32
+
+  farmos:           # farmOS 3.x
+    image: farmos/farmos:3.x-dev
+    volumes: [./data/farmos:/var/www/html/sites/default]
+
+  gitea:            # Git server + web UI
+    image: gitea/gitea:1.21
+    volumes: [./data/gitea:/data]
+    ports: ["3000:3000"]
+
+  caddy:            # Reverse proxy + automatic HTTPS (local cert)
+    image: caddy:2-alpine
+    volumes: [./Caddyfile:/etc/caddy/Caddyfile]
+    ports: ["80:80","443:443"]
+
+  # Optional: MinIO for S3-compatible media overflow
+  minio:
+    image: minio/minio:latest
+    volumes: [./data/minio:/data]
+    command: server /data --console-address :9001
+`
+)+'</pre>',
+'</div>',
+
+'<div class="card">',
+'<div class="card-header"><div class="card-title">🌐 Multi-Node Mirroring</div></div>',
+'<div style="font-size:13px;color:var(--muted);line-height:1.8">',
+'<strong style="color:var(--text)">Primary → Cloud mirror:</strong> <code>pg_dump</code> cron → rclone → Supabase cloud or S3. ',
+'All farm HTML apps keep working when the Pi is unreachable because localStorage holds the last-known state.<br>',
+'<br>',
+'<strong style="color:var(--text)">Primary → Secondary node:</strong> Postgres logical replication between two Pi nodes on the same farm network (barn ↔ house). ',
+'One is primary for writes; the other is a hot standby and serves reads.<br>',
+'<br>',
+'<strong style="color:var(--text)">Cross-farm sync (FarmHack network):</strong> ',
+'Gitea federation (ActivityPub / Gitea Federation) shares code repos between nodes. ',
+'Farm data stays private unless explicitly shared. Media files sync via rclone + MinIO. ',
+'A lightweight gossip protocol (e.g. Tailscale mesh VPN + litestream) can keep ',
+'DB snapshots current across geographically distributed nodes without port forwarding.<br>',
+'<br>',
+'<strong style="color:var(--text)">Caddyfile example (local farm.lan cert):</strong>',
+'<pre style="margin-top:8px">'+esc(
+`farm.lan {
+  tls internal
+  handle /farmos/* { reverse_proxy farmos:80 }
+  handle /gitea/*  { reverse_proxy gitea:3000 }
+  handle /api/*    { reverse_proxy supabase-api:3000 }
+  handle /auth/*   { reverse_proxy supabase-auth:9999 }
+  handle /storage/*{ reverse_proxy supabase-storage:5000 }
+  handle           { file_server { root /farmhack-sites } }
+}`)+'</pre>',
+'</div>',
+'</div>',
+
+'<div class="card">',
+'<div class="card-header"><div class="card-title">🔧 Pointing the Sites at a Local Node</div></div>',
+'<div style="font-size:13px;color:var(--muted)">',
+'In this admin page, set your <strong>Project URL</strong> to your local node, e.g. <code>https://farm.lan</code> ',
+'instead of the Supabase cloud URL. The anon key comes from your local GoTrue config. ',
+'The farm HTML sites use the same <code>farmhack-supabase-v1</code> localStorage key — ',
+'swap the URL and they instantly point at the local backend.',
+'</div>',
+'</div>',
+  ].join('');
+}
+
+// ─────────────────────────────────────────────────────────────────
+// PAGE: Media Hosting
+// ─────────────────────────────────────────────────────────────────
+function pageMedia(){
+  return [
+'<h2>🎥 Media File Hosting</h2>',
+'<p class="section-desc">Recommendation for photos, video, and audio across farm logs, tool documentation, and assembly guides.</p>',
+
+'<div class="alert alert-success"><div>',
+'<strong>Short answer:</strong> Use <strong>Supabase Storage</strong> (or MinIO on a local node) for all farm operational media. ',
+'Use <strong>Cloudflare R2</strong> for large archival / public video. Git and farmOS are explicitly not suited for binary media.',
+'</div></div>',
+
+'<div class="card">',
+'<div class="card-header"><div class="card-title">📊 Decision Matrix</div></div>',
+'<table>',
+'<tr><th>Backend</th><th>Best for</th><th>Max size</th><th>Self-hostable?</th><th>Cost</th></tr>',
+'<tr><td><strong>Supabase Storage</strong></td><td>Farm op photos, log attachments, signed docs, small audio</td><td>50 GB free</td><td>✓ (MinIO)</td><td>Free → $25/mo</td></tr>',
+'<tr><td><strong>MinIO (local Pi)</strong></td><td>All farm media on local network, offline-first</td><td>Disk only</td><td>✓ Native</td><td>Free (hardware)</td></tr>',
+'<tr><td><strong>Cloudflare R2</strong></td><td>Large video, public tool docs, zero-egress CDN</td><td>Unlimited</td><td>Partial</td><td>$0.015/GB stored</td></tr>',
+'<tr><td><strong>Backblaze B2</strong></td><td>Archival, backup, large audio/video</td><td>Unlimited</td><td>✗</td><td>$6/TB/mo</td></tr>',
+'<tr><td style="color:var(--muted)">Git LFS</td><td style="color:var(--muted)">Code assets only (&lt;100 MB files)</td><td style="color:var(--muted)">1 GB free</td><td style="color:var(--muted)">✓ Gitea LFS</td><td style="color:var(--muted)">Not recommended</td></tr>',
+'<tr><td style="color:var(--muted)">farmOS files</td><td style="color:var(--muted)">Drupal file field attachments only</td><td style="color:var(--muted)">Server disk</td><td style="color:var(--muted)">✓</td><td style="color:var(--muted)">No CDN, no transcoding</td></tr>',
+'</table>',
+'</div>',
+
+'<div class="card">',
+'<div class="card-header"><div class="card-title">🗂️ Recommended File Routing</div></div>',
+'<pre>'+esc(
+`Farm operational media  →  Supabase Storage (farm-media bucket)
+  • Hound / horse profile photos
+  • Chore log attachments (photo of completed work)
+  • Check-in photos (hunter gate selfies)
+  • Barn circle note attachments
+  • Observation log images pushed to farmOS
+
+Signed documents         →  Supabase Storage (farm-docs bucket)
+  • PDF exports of waivers
+  • Signature canvas PNG captures
+
+FarmHack tool docs       →  Cloudflare R2 + Gitea (Markdown + media)
+  • Assembly how-to videos  →  R2 (zero egress)
+  • Assembly photos          →  R2 or Supabase
+  • Markdown docs            →  Gitea repo (text only, no binaries)
+
+Sensor / telemetry audio →  MinIO (local Pi)
+  • Sound recordings from hound tracking
+  • Wildlife audio from trail cams
+  • Acoustic monitoring (bees, insects)
+  • Large files, rarely accessed externally
+
+Archival / long-term     →  Backblaze B2
+  • Season hunt recordings
+  • Video documentation
+  • Annual photo archives
+`)+'</pre>',
+'</div>',
+
+'<div class="card">',
+'<div class="card-header"><div class="card-title">🔌 How It Integrates With the Sites</div></div>',
+'<div style="font-size:13px;color:var(--muted);line-height:1.8">',
+'The <code>media</code> table in Supabase stores a record for every uploaded file: ',
+'<code>storage_path</code> (the bucket path), <code>storage_backend</code> (supabase / minio / r2), ',
+'<code>entity_type</code>, and <code>entity_id</code>. ',
+'The HTML app calls <code>AUTH.uploadMedia(file, entityType, entityId)</code> which handles upload + table insert. ',
+'Signed URLs (valid 1 hour) are generated on-demand so files are never publicly crawlable.<br><br>',
+'For <strong>MinIO / R2 backends</strong>, swap the bucket name and endpoint in the upload function — ',
+'the <code>media</code> table record format stays identical, making backends fully swappable. ',
+'A future <code>farmhack-media-proxy</code> service can transparently route to whichever backend is online (local Pi first, cloud fallback).',
+'</div>',
+'</div>',
+  ].join('');
+}
+
+// ─────────────────────────────────────────────────────────────────
+// PAGE: Farm Store POS
+// ─────────────────────────────────────────────────────────────────
+function pagePOS(){
+  var posConfig = getPosConfig();
+  return [
+'<h2>🏪 Farm Store POS System</h2>',
+'<p class="section-desc">Configure the cooperative farm store point-of-sale system. Supports multi-vendor consignment, Supabase backend, and Raspberry Pi self-hosting.</p>',
+
+'<div class="alert alert-info"><div>',
+'<strong>Quick Start:</strong> The POS system can run standalone (demo mode) or connect to Supabase for persistent data. ',
+'Configure the database connection below, then open the POS system from the sidebar.',
+'</div></div>',
+
+'<div class="card">',
+'<div class="card-header"><div class="card-title">🗄️ Database Configuration</div></div>',
+
+'<div class="field">',
+'<label>Database Backend</label>',
+'<select id="pos-db-type" onchange="updatePosDbFields()">',
+'<option value="demo"'+(posConfig.dbType==='demo'?' selected':'')+'>Demo Mode (No Database)</option>',
+'<option value="supabase"'+(posConfig.dbType==='supabase'?' selected':'')+'>Supabase (Cloud)</option>',
+'<option value="postgresql"'+(posConfig.dbType==='postgresql'?' selected':'')+'>PostgreSQL (Self-Hosted)</option>',
+'</select>',
+'<div class="hint">Demo mode stores data in browser memory only. Supabase shares credentials with FarmHack auth.</div>',
+'</div>',
+
+'<div id="pos-supabase-fields" style="display:none">',
+'<div class="alert alert-success" style="margin-bottom:16px"><div>',
+'<strong>✓ Supabase credentials shared</strong> — The POS will use the same Supabase project configured on the Credentials page.',
+'</div></div>',
+'</div>',
+
+'<div id="pos-postgres-fields" style="display:none">',
+'<div class="row">',
+'<div class="field"><label>Host</label><input id="pos-db-host" value="'+esc(posConfig.dbHost||'localhost')+'"></div>',
+'<div class="field"><label>Port</label><input id="pos-db-port" type="number" value="'+(posConfig.dbPort||5432)+'"></div>',
+'</div>',
+'<div class="field"><label>Database Name</label><input id="pos-db-name" value="'+esc(posConfig.dbName||'farm_pos')+'"></div>',
+'<div class="row">',
+'<div class="field"><label>Username</label><input id="pos-db-user" value="'+esc(posConfig.dbUser||'pos_user')+'"></div>',
+'<div class="field"><label>Password</label><input id="pos-db-pass" type="password" value="'+esc(posConfig.dbPass||'')+'"></div>',
+'</div>',
+'<div class="hint">For Raspberry Pi: default is localhost:5432, database farm_pos</div>',
+'</div>',
+
+'<div style="display:flex;gap:10px;margin-top:16px">',
+'<button class="btn btn-primary" onclick="savePosConfig()">Save Configuration</button>',
+'<button class="btn btn-secondary" onclick="testPosConnection()">Test Connection</button>',
+'</div>',
+'<div id="pos-db-result" style="margin-top:12px"></div>',
+'</div>',
+
+'<div class="card">',
+'<div class="card-header"><div class="card-title">💳 Payment Processor</div></div>',
+'<div class="field">',
+'<label>Payment Provider</label>',
+'<select id="pos-payment-provider">',
+'<option value="stripe"'+(posConfig.paymentProvider==='stripe'?' selected':'')+'>Stripe (2.6% + $0.10)</option>',
+'<option value="square"'+(posConfig.paymentProvider==='square'?' selected':'')+'>Square (2.6% + $0.10)</option>',
+'<option value="sumup"'+(posConfig.paymentProvider==='sumup'?' selected':'')+'>SumUp (2.75%)</option>',
+'<option value="paypal"'+(posConfig.paymentProvider==='paypal'?' selected':'')+'>PayPal Zettle (2.29% + $0.09)</option>',
+'<option value="cash"'+(posConfig.paymentProvider==='cash'?' selected':'')+'>Cash Only</option>',
+'</select>',
+'</div>',
+'<div class="field">',
+'<label>API Key <span style="font-weight:400;text-transform:none;color:#666">(optional — enter in POS admin)</span></label>',
+'<input id="pos-payment-key" type="password" value="'+esc(posConfig.paymentKey||'')+'" placeholder="sk_live_...">',
+'</div>',
+'<label style="display:flex;align-items:center;gap:8px;font-size:12px;text-transform:none;letter-spacing:normal;color:var(--text)">',
+'<input type="checkbox" id="pos-test-mode"'+(posConfig.testMode?' checked':'')+'>',
+'Test Mode (no real charges)',
+'</label>',
+'</div>',
+
+'<div class="card">',
+'<div class="card-header"><div class="card-title">🌱 farmOS Integration</div></div>',
+'<div class="field">',
+'<label style="display:flex;align-items:center;gap:8px;font-size:12px;text-transform:none;letter-spacing:normal;color:var(--text)">',
+'<input type="checkbox" id="pos-farmos-enabled"'+(posConfig.farmosEnabled?' checked':'')+'>',
+'Enable farmOS sync (harvests → inventory, sales → observations)',
+'</label>',
+'</div>',
+'<div class="hint">Requires farmOS OAuth credentials. See farmOS docs for consumer setup.</div>',
+'</div>',
+
+'<div class="card">',
+'<div class="card-header"><div class="card-title">📊 POS Schema</div></div>',
+'<p style="font-size:13px;color:var(--muted);margin-bottom:12px">',
+'Add these tables to your Supabase project to enable POS data persistence:',
+'</p>',
+'<button class="btn btn-primary btn-sm" onclick="copyPosSchema()">Copy POS SQL Schema</button>',
+'<div id="pos-schema-result" style="margin-top:8px"></div>',
+'<pre id="pos-schema-pre" style="max-height:300px;margin-top:16px;font-size:11px">'+esc(POS_SCHEMA_SQL)+'</pre>',
+'</div>',
+
+'<div class="card">',
+'<div class="card-header"><div class="card-title">🚀 Launch POS</div></div>',
+'<p style="font-size:13px;color:var(--muted);margin-bottom:16px">',
+'Open the POS system in a new window. Login PINs: Admin (1234), Manager (5678), Cashier (0000), Kiosk (9999).',
+'</p>',
+'<button class="btn btn-green" onclick="openSite(\'farm-pos-v4.html\')" style="font-size:15px;padding:12px 24px">',
+'🛒 Open Farm Store POS',
+'</button>',
+'</div>',
+  ].join('');
+}
+
+function getPosConfig(){
+  try { return JSON.parse(localStorage.getItem('farmhack-pos-config-v1')) || {}; }
+  catch(_) { return {}; }
+}
+
+function savePosConfig(){
+  var config = {
+    dbType: document.getElementById('pos-db-type').value,
+    dbHost: document.getElementById('pos-db-host')?.value || 'localhost',
+    dbPort: parseInt(document.getElementById('pos-db-port')?.value) || 5432,
+    dbName: document.getElementById('pos-db-name')?.value || 'farm_pos',
+    dbUser: document.getElementById('pos-db-user')?.value || 'pos_user',
+    dbPass: document.getElementById('pos-db-pass')?.value || '',
+    paymentProvider: document.getElementById('pos-payment-provider').value,
+    paymentKey: document.getElementById('pos-payment-key').value,
+    testMode: document.getElementById('pos-test-mode').checked,
+    farmosEnabled: document.getElementById('pos-farmos-enabled').checked
+  };
+  localStorage.setItem('farmhack-pos-config-v1', JSON.stringify(config));
+  showResult('pos-db-result', '✓ POS configuration saved', 'ok');
+}
+
+function updatePosDbFields(){
+  var type = document.getElementById('pos-db-type').value;
+  document.getElementById('pos-supabase-fields').style.display = type==='supabase' ? 'block' : 'none';
+  document.getElementById('pos-postgres-fields').style.display = type==='postgresql' ? 'block' : 'none';
+}
+
+function testPosConnection(){
+  var type = document.getElementById('pos-db-type').value;
+  showResult('pos-db-result', '⏳ Testing connection...', 'info');
+  
+  if(type === 'demo'){
+    setTimeout(function(){ showResult('pos-db-result', '✓ Demo mode — no database required', 'ok'); }, 500);
+    return;
+  }
+  if(type === 'supabase'){
+    if(!_sb){ showResult('pos-db-result', '✗ Supabase not connected. Save credentials first.', 'err'); return; }
+    _sb.from('pos_products').select('id').limit(1).then(function(r){
+      if(r.error){
+        showResult('pos-db-result', 'Supabase connected but POS tables not found. Run the POS schema SQL first.', 'info');
+      } else {
+        showResult('pos-db-result', '✓ Supabase connected — POS tables found', 'ok');
+      }
+    });
+    return;
+  }
+  // PostgreSQL test would require a backend — show instructions
+  showResult('pos-db-result', 'PostgreSQL connection test requires the POS backend running on the Pi. Configuration saved for later.', 'info');
+}
+
+function copyPosSchema(){
+  navigator.clipboard.writeText(POS_SCHEMA_SQL).then(function(){
+    showResult('pos-schema-result', '✓ POS schema copied — paste into Supabase SQL Editor', 'ok');
+  });
+}
+
+var POS_SCHEMA_SQL = `-- ============================================================================
+-- FARM STORE POS SCHEMA — Supabase Extension
+-- Add to existing FarmHack Supabase project
+-- ============================================================================
+
+-- ── POS Enums ────────────────────────────────────────────────────────────────
+CREATE TYPE pos_vendor_type AS ENUM ('owner', 'consignment');
+CREATE TYPE pos_unit_type AS ENUM ('each', 'weight', 'bunch', 'dozen', 'half-dozen', 'pint', 'gallon');
+CREATE TYPE pos_payment_method AS ENUM ('cash', 'card', 'check', 'account');
+CREATE TYPE pos_device_type AS ENUM ('scanner', 'printer', 'scale', 'cashDrawer', 'cardReader', 'labelPrinter', 'customerDisplay');
+
+-- ── pos_vendors ──────────────────────────────────────────────────────────────
+CREATE TABLE pos_vendors (
+  id              TEXT PRIMARY KEY,
+  name            TEXT NOT NULL,
+  vendor_type     pos_vendor_type NOT NULL DEFAULT 'consignment',
+  commission_rate DECIMAL(5,2) NOT NULL DEFAULT 15.00,
+  contact_email   TEXT,
+  contact_phone   TEXT,
+  payment_method  TEXT DEFAULT 'check',
+  payment_terms   TEXT DEFAULT 'net-15',
+  color           TEXT DEFAULT '#666666',
+  is_active       BOOLEAN NOT NULL DEFAULT true,
+  profile_id      UUID REFERENCES profiles(id),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ── pos_categories ───────────────────────────────────────────────────────────
+CREATE TABLE pos_categories (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  icon        TEXT,
+  is_active   BOOLEAN NOT NULL DEFAULT true
+);
+
+INSERT INTO pos_categories (id, name, sort_order, icon) VALUES
+  ('vegetables', 'Vegetables', 1, '🥬'),
+  ('fruit', 'Fruit', 2, '🍎'),
+  ('eggs', 'Eggs', 3, '🥚'),
+  ('dairy', 'Dairy', 4, '🥛'),
+  ('meat', 'Meat', 5, '🥩'),
+  ('preserves', 'Preserves', 6, '🍯')
+ON CONFLICT (id) DO NOTHING;
+
+-- ── pos_products ─────────────────────────────────────────────────────────────
+CREATE TABLE pos_products (
+  id            TEXT PRIMARY KEY DEFAULT 'p_' || substr(md5(random()::text), 1, 8),
+  name          TEXT NOT NULL,
+  price         DECIMAL(10,2) NOT NULL,
+  unit          TEXT NOT NULL DEFAULT 'each',
+  unit_type     pos_unit_type NOT NULL DEFAULT 'each',
+  stock         INTEGER NOT NULL DEFAULT 0,
+  min_stock     INTEGER NOT NULL DEFAULT 5,
+  barcode       TEXT UNIQUE,
+  image_url     TEXT,
+  vendor_id     TEXT NOT NULL REFERENCES pos_vendors(id),
+  category_id   TEXT NOT NULL REFERENCES pos_categories(id),
+  farmos_asset  TEXT,
+  is_active     BOOLEAN NOT NULL DEFAULT true,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX pos_products_vendor ON pos_products(vendor_id);
+CREATE INDEX pos_products_category ON pos_products(category_id);
+CREATE INDEX pos_products_barcode ON pos_products(barcode) WHERE barcode IS NOT NULL;
+
+-- ── pos_transactions ─────────────────────────────────────────────────────────
+CREATE TABLE pos_transactions (
+  id              UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  transaction_num TEXT NOT NULL,
+  cashier_id      UUID REFERENCES profiles(id),
+  subtotal        DECIMAL(10,2) NOT NULL,
+  tax_amount      DECIMAL(10,2) NOT NULL DEFAULT 0,
+  total           DECIMAL(10,2) NOT NULL,
+  payment_method  pos_payment_method NOT NULL DEFAULT 'cash',
+  payment_ref     TEXT,
+  status          TEXT NOT NULL DEFAULT 'completed',
+  is_kiosk        BOOLEAN NOT NULL DEFAULT false,
+  device_id       TEXT,
+  notes           TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX pos_transactions_date ON pos_transactions(created_at);
+CREATE INDEX pos_transactions_cashier ON pos_transactions(cashier_id);
+
+-- ── pos_transaction_items ────────────────────────────────────────────────────
+CREATE TABLE pos_transaction_items (
+  id              UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  transaction_id  UUID NOT NULL REFERENCES pos_transactions(id) ON DELETE CASCADE,
+  product_id      TEXT NOT NULL REFERENCES pos_products(id),
+  vendor_id       TEXT NOT NULL REFERENCES pos_vendors(id),
+  quantity        DECIMAL(10,3) NOT NULL,
+  unit_price      DECIMAL(10,2) NOT NULL,
+  line_total      DECIMAL(10,2) NOT NULL,
+  commission_rate DECIMAL(5,2) NOT NULL,
+  commission_amt  DECIMAL(10,2) NOT NULL,
+  is_weight       BOOLEAN NOT NULL DEFAULT false
+);
+
+CREATE INDEX pos_items_transaction ON pos_transaction_items(transaction_id);
+CREATE INDEX pos_items_vendor ON pos_transaction_items(vendor_id);
+
+-- ── pos_settlements ──────────────────────────────────────────────────────────
+CREATE TABLE pos_settlements (
+  id            UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  vendor_id     TEXT NOT NULL REFERENCES pos_vendors(id),
+  period_start  DATE NOT NULL,
+  period_end    DATE NOT NULL,
+  gross_sales   DECIMAL(10,2) NOT NULL,
+  commission    DECIMAL(10,2) NOT NULL,
+  net_payable   DECIMAL(10,2) NOT NULL,
+  status        TEXT NOT NULL DEFAULT 'pending',
+  paid_at       TIMESTAMPTZ,
+  paid_by       UUID REFERENCES profiles(id),
+  payment_ref   TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ── pos_devices ──────────────────────────────────────────────────────────────
+CREATE TABLE pos_devices (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  device_type pos_device_type NOT NULL,
+  model       TEXT,
+  connection  TEXT NOT NULL DEFAULT 'usb',
+  port        TEXT,
+  status      TEXT NOT NULL DEFAULT 'disconnected',
+  is_enabled  BOOLEAN NOT NULL DEFAULT true,
+  config      JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ── pos_settings ─────────────────────────────────────────────────────────────
+CREATE TABLE pos_settings (
+  key         TEXT PRIMARY KEY,
+  value       JSONB NOT NULL,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO pos_settings (key, value) VALUES
+  ('store', '{"name": "Valley View Farm Cooperative", "address": "123 Farm Road", "phone": "(555) 123-4567"}'::jsonb),
+  ('tax', '{"rate": 0, "enabled": false}'::jsonb),
+  ('kiosk', '{"enabled": true, "timeout": 60}'::jsonb),
+  ('receipt', '{"header": "Thank you for shopping local!", "footer": "Support your local farmers"}'::jsonb)
+ON CONFLICT (key) DO NOTHING;
+
+-- ── Enable RLS ───────────────────────────────────────────────────────────────
+ALTER TABLE pos_vendors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pos_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pos_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pos_transaction_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pos_settlements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pos_devices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pos_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pos_categories ENABLE ROW LEVEL SECURITY;
+
+-- ── RLS Policies ─────────────────────────────────────────────────────────────
+-- Public read for products/vendors/categories (kiosk needs this)
+CREATE POLICY "pos_vendors_select" ON pos_vendors FOR SELECT USING (true);
+CREATE POLICY "pos_products_select" ON pos_products FOR SELECT USING (true);
+CREATE POLICY "pos_categories_select" ON pos_categories FOR SELECT USING (true);
+CREATE POLICY "pos_settings_select" ON pos_settings FOR SELECT USING (true);
+
+-- Authenticated users can read transactions
+CREATE POLICY "pos_transactions_select" ON pos_transactions FOR SELECT 
+  USING (auth.uid() IS NOT NULL);
+CREATE POLICY "pos_items_select" ON pos_transaction_items FOR SELECT 
+  USING (auth.uid() IS NOT NULL);
+
+-- Managers/admins can insert/update
+CREATE POLICY "pos_vendors_insert" ON pos_vendors FOR INSERT 
+  WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','super_admin','manager'));
+CREATE POLICY "pos_vendors_update" ON pos_vendors FOR UPDATE 
+  USING ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','super_admin','manager'));
+
+CREATE POLICY "pos_products_insert" ON pos_products FOR INSERT 
+  WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','super_admin','manager'));
+CREATE POLICY "pos_products_update" ON pos_products FOR UPDATE 
+  USING ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','super_admin','manager'));
+
+-- Any authenticated user can create transactions (cashier role)
+CREATE POLICY "pos_transactions_insert" ON pos_transactions FOR INSERT 
+  WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY "pos_items_insert" ON pos_transaction_items FOR INSERT 
+  WITH CHECK (auth.uid() IS NOT NULL);
+
+-- Devices and settlements admin only
+CREATE POLICY "pos_devices_all" ON pos_devices FOR ALL 
+  USING ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','super_admin'));
+CREATE POLICY "pos_settlements_all" ON pos_settlements FOR ALL 
+  USING ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','super_admin','manager'));
+CREATE POLICY "pos_settings_update" ON pos_settings FOR UPDATE 
+  USING ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','super_admin'));
+
+-- ── Views ────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE VIEW pos_inventory_status AS
+SELECT 
+  p.id, p.name, p.stock, p.min_stock, p.price, p.unit,
+  v.name as vendor_name, v.id as vendor_id,
+  c.name as category_name,
+  CASE WHEN p.stock <= p.min_stock THEN 'low' ELSE 'ok' END as stock_status
+FROM pos_products p
+JOIN pos_vendors v ON p.vendor_id = v.id
+JOIN pos_categories c ON p.category_id = c.id
+WHERE p.is_active = true;
+
+CREATE OR REPLACE VIEW pos_vendor_sales_summary AS
+SELECT 
+  v.id as vendor_id, v.name as vendor_name,
+  COUNT(DISTINCT t.id) as transaction_count,
+  SUM(ti.line_total) as gross_sales,
+  SUM(ti.commission_amt) as total_commission,
+  SUM(ti.line_total - ti.commission_amt) as net_payable
+FROM pos_vendors v
+LEFT JOIN pos_transaction_items ti ON v.id = ti.vendor_id
+LEFT JOIN pos_transactions t ON ti.transaction_id = t.id
+WHERE v.vendor_type = 'consignment'
+GROUP BY v.id, v.name;
+`;
+
+// ─────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────
+function showResult(elId, msg, type){
+  var el = document.getElementById(elId);
+  if(!el) return;
+  var colors = {ok:'var(--green)', err:'var(--red)', info:'var(--accent)'};
+  el.style.color = colors[type] || 'var(--text)';
+  el.innerHTML = '<div class="alert alert-'+(type==='ok'?'success':type==='err'?'danger':'info')+'">'+esc(msg)+'</div>';
+}
+
+function initPage(name){
+  if(name==='status') setTimeout(runStatusCheck, 100);
+  if(name==='schema') {} // schema pre-filled
+  if(name==='pos') setTimeout(updatePosDbFields, 50);
+}
+
+// ── Embedded schema SQL (subset — point to full file for production) ──────────
+var SCHEMA_SQL = [
+'-- Run this in Supabase SQL Editor → New Query',
+'-- Full file: supabase-schema.sql (included in farmhack package)',
+'',
+'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";',
+'',
+'CREATE TYPE farm_role AS ENUM (\'super_admin\',\'admin\',\'manager\',\'member\',\'guest\',\'pending\');',
+'CREATE TYPE farm_site AS ENUM (\'barn\',\'kennel\',\'hunters\',\'all\');',
+'CREATE TYPE doc_type  AS ENUM (\'liability_release\',\'boarding_agreement\',\'hunter_release\',\'hunt_membership\',\'volunteer_agreement\');',
+'CREATE TYPE media_kind AS ENUM (\'photo\',\'video\',\'audio\',\'document\',\'gpx\');',
+'',
+'CREATE TABLE IF NOT EXISTS profiles (',
+'  id            UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,',
+'  email         TEXT NOT NULL,',
+'  full_name     TEXT, display_name TEXT,',
+'  role          farm_role NOT NULL DEFAULT \'pending\',',
+'  site_access   JSONB NOT NULL DEFAULT \'{}\'::jsonb,',
+'  phone TEXT, address TEXT, emergency_name TEXT, emergency_phone TEXT,',
+'  vehicle TEXT, trailer TEXT, farmos_uuid TEXT,',
+'  is_active BOOLEAN NOT NULL DEFAULT true,',
+'  created_at TIMESTAMPTZ NOT NULL DEFAULT now()',
+');',
+'',
+'CREATE TABLE IF NOT EXISTS documents (',
+'  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,',
+'  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,',
+'  site farm_site NOT NULL, doc_type doc_type NOT NULL, season TEXT,',
+'  signed_at TIMESTAMPTZ NOT NULL DEFAULT now(),',
+'  signature_data TEXT, acknowledgments JSONB, signer_name TEXT,',
+'  is_valid BOOLEAN NOT NULL DEFAULT true,',
+'  created_at TIMESTAMPTZ NOT NULL DEFAULT now()',
+');',
+'',
+'CREATE TABLE IF NOT EXISTS media (',
+'  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,',
+'  uploaded_by UUID REFERENCES profiles(id),',
+'  site farm_site NOT NULL, entity_type TEXT, entity_id TEXT,',
+'  kind media_kind NOT NULL DEFAULT \'photo\',',
+'  storage_path TEXT NOT NULL, storage_backend TEXT NOT NULL DEFAULT \'supabase\',',
+'  filename TEXT, mime_type TEXT, size_bytes BIGINT,',
+'  caption TEXT, is_public BOOLEAN NOT NULL DEFAULT false,',
+'  created_at TIMESTAMPTZ NOT NULL DEFAULT now()',
+');',
+'',
+'CREATE TABLE IF NOT EXISTS site_config (',
+'  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,',
+'  site farm_site NOT NULL, key TEXT NOT NULL, value JSONB,',
+'  UNIQUE (site, key)',
+');',
+'',
+'-- Enable Row Level Security',
+'ALTER TABLE profiles  ENABLE ROW LEVEL SECURITY;',
+'ALTER TABLE documents ENABLE ROW LEVEL SECURITY;',
+'ALTER TABLE media      ENABLE ROW LEVEL SECURITY;',
+'ALTER TABLE site_config ENABLE ROW LEVEL SECURITY;',
+'',
+'-- RLS policies',
+'CREATE POLICY "profiles_select" ON profiles FOR SELECT USING (is_active OR id = auth.uid());',
+'CREATE POLICY "profiles_insert" ON profiles FOR INSERT WITH CHECK (id = auth.uid());',
+'CREATE POLICY "profiles_update_own" ON profiles FOR UPDATE USING (id = auth.uid());',
+'CREATE POLICY "documents_select" ON documents FOR SELECT USING (',
+'  user_id = auth.uid() OR',
+'  (SELECT role FROM profiles WHERE id = auth.uid()) IN (\'admin\',\'super_admin\',\'manager\'));',
+'CREATE POLICY "documents_insert" ON documents FOR INSERT WITH CHECK (user_id = auth.uid());',
+'CREATE POLICY "media_select"    ON media FOR SELECT USING (auth.uid() IS NOT NULL);',
+'CREATE POLICY "media_insert"    ON media FOR INSERT WITH CHECK (uploaded_by = auth.uid());',
+'CREATE POLICY "config_select"   ON site_config FOR SELECT USING (true);',
+'',
+'-- Storage buckets',
+'INSERT INTO storage.buckets (id,name,public,file_size_limit) VALUES',
+'  (\'farm-media\',\'farm-media\',false,104857600),',
+'  (\'farm-docs\',\'farm-docs\',false,20971520),',
+'  (\'farm-public\',\'farm-public\',true,5242880)',
+'ON CONFLICT (id) DO NOTHING;',
+'',
+'-- See supabase-schema.sql for complete schema with all policies, views, and seed data'
+].join('\n');
+
+// ── Init ──────────────────────────────────────────────────────────
+connect();
+showPage('credentials');
+</script>
+</body>
+</html>
