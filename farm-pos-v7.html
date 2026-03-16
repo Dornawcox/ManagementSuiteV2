@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Farm POS v7.8</title>
+  <title>Farm POS v7.9</title>
   <meta name="description" content="Cooperative Farm Store POS with multi-vendor consignment, role-based access, and peripheral device management">
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
@@ -19,7 +19,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
   
   <script>
-    console.log('[POS] === VERSION 7.8 LOADING ===');
+    console.log('[POS] === VERSION 7.9 LOADING ===');
     
     // Check for URL parameters to set Supabase credentials
     (function() {
@@ -283,6 +283,8 @@
             id: p.id || 'p_' + Date.now(),
             name: p.name, 
             price: parseFloat(p.price), 
+            cost: p.cost ? parseFloat(p.cost) : null,
+            markup: p.markup ? parseFloat(p.markup) : null,
             unit: p.unit || 'each',
             unit_type: p.unitType || 'each', 
             stock: parseInt(p.stock) || 0,
@@ -584,6 +586,323 @@
           console.error('[POS] seedDemoData error:', e);
           return { success: false, error: e.message };
         }
+      },
+      
+      // Customer management
+      fetchCustomers: async function() {
+        if (!this.client) return [];
+        try {
+          var r = await this.client.from('pos_customers').select('*').order('name', { ascending: true });
+          if (r.error) { 
+            if (r.error.code === '42P01') { console.log('[POS] pos_customers table not found'); return null; }
+            console.error('[POS] fetchCustomers error:', r.error); 
+            return null; 
+          }
+          console.log('[POS] Fetched customers:', r.data?.length || 0);
+          return r.data || [];
+        } catch(e) { console.error('[POS] fetchCustomers exception:', e); return null; }
+      },
+      
+      saveCustomer: async function(c) {
+        if (!this.client) return { success: false, error: 'Not connected' };
+        try {
+          var d = {
+            id: c.id || 'cust_' + Date.now(),
+            name: c.name,
+            email: c.email || null,
+            phone: c.phone || null,
+            card_uid: c.cardUid || null,
+            account_type: c.accountType || 'regular',
+            house_account_balance: parseFloat(c.houseAccountBalance) || 0,
+            prepaid_balance: parseFloat(c.prepaidBalance) || 0,
+            discount_percent: parseFloat(c.discountPercent) || 0,
+            door_access: c.doorAccess === true,
+            door_access_hours: c.doorAccessHours || null,
+            notes: c.notes || null,
+            is_active: c.active !== false
+          };
+          var r = await this.client.from('pos_customers').upsert(d, { onConflict: 'id' }).select().single();
+          if (r.error) { console.error('[POS] saveCustomer error:', r.error); return { success: false, error: r.error.message }; }
+          console.log('[POS] Customer saved:', d.id);
+          return { success: true, data: r.data };
+        } catch(e) { console.error('[POS] saveCustomer exception:', e); return { success: false, error: e.message }; }
+      },
+      
+      findCustomerByCard: async function(cardUid) {
+        if (!this.client) return null;
+        try {
+          var r = await this.client.from('pos_customers').select('*').eq('card_uid', cardUid).single();
+          if (r.error) { console.log('[POS] Customer not found for card:', cardUid); return null; }
+          return r.data;
+        } catch(e) { console.error('[POS] findCustomerByCard exception:', e); return null; }
+      },
+      
+      deleteCustomer: async function(id) {
+        if (!this.client) return { success: false, error: 'Not connected' };
+        try {
+          var r = await this.client.from('pos_customers').delete().eq('id', id);
+          if (r.error) { return { success: false, error: r.error.message }; }
+          return { success: true };
+        } catch(e) { return { success: false, error: e.message }; }
+      }
+    };
+    
+    // ============================================
+    // NFC/RFID HARDWARE MODULE
+    // Compatible with ACR122U, PN532 (via Raspberry Pi)
+    // Uses Web Serial API for direct hardware access
+    // ============================================
+    window.NFC_RFID = {
+      connected: false,
+      port: null,
+      reader: null,
+      writer: null,
+      lastCardUid: null,
+      onCardRead: null, // Callback for card reads
+      
+      // Check if Web Serial API is available
+      isSupported: function() {
+        return 'serial' in navigator;
+      },
+      
+      // Connect to NFC reader via Web Serial
+      connect: async function() {
+        if (!this.isSupported()) {
+          console.error('[NFC] Web Serial API not supported. Use Chrome/Edge on desktop.');
+          return { success: false, error: 'Web Serial API not supported. Use Chrome or Edge browser.' };
+        }
+        
+        try {
+          // Request port access (will show picker dialog)
+          this.port = await navigator.serial.requestPort({
+            filters: [
+              { usbVendorId: 0x072F }, // ACR122U
+              { usbVendorId: 0x04E6 }, // SCM Microsystems
+              { usbVendorId: 0x1A86 }, // CH340 (PN532 boards)
+              { usbVendorId: 0x0403 }, // FTDI (PN532 boards)
+            ]
+          });
+          
+          // Open port with PN532 typical settings
+          await this.port.open({ 
+            baudRate: 115200,
+            dataBits: 8,
+            stopBits: 1,
+            parity: 'none'
+          });
+          
+          this.reader = this.port.readable.getReader();
+          this.writer = this.port.writable.getWriter();
+          this.connected = true;
+          
+          console.log('[NFC] Connected to reader');
+          
+          // Start reading loop
+          this.startReading();
+          
+          return { success: true };
+        } catch(e) {
+          console.error('[NFC] Connection error:', e);
+          return { success: false, error: e.message };
+        }
+      },
+      
+      // Disconnect from reader
+      disconnect: async function() {
+        if (this.reader) {
+          await this.reader.cancel();
+          this.reader.releaseLock();
+        }
+        if (this.writer) {
+          this.writer.releaseLock();
+        }
+        if (this.port) {
+          await this.port.close();
+        }
+        this.connected = false;
+        this.port = null;
+        this.reader = null;
+        this.writer = null;
+        console.log('[NFC] Disconnected');
+      },
+      
+      // PN532 command to wake up and get firmware version
+      wakeUp: async function() {
+        if (!this.writer) return false;
+        try {
+          // PN532 wake up command
+          const wakeUp = new Uint8Array([0x55, 0x55, 0x00, 0x00, 0x00]);
+          await this.writer.write(wakeUp);
+          await new Promise(r => setTimeout(r, 100));
+          
+          // Get firmware version
+          const getFirmware = new Uint8Array([0x00, 0x00, 0xFF, 0x02, 0xFE, 0xD4, 0x02, 0x2A, 0x00]);
+          await this.writer.write(getFirmware);
+          return true;
+        } catch(e) {
+          console.error('[NFC] Wake up error:', e);
+          return false;
+        }
+      },
+      
+      // PN532 InListPassiveTarget command (detect card)
+      pollForCard: async function() {
+        if (!this.writer) return null;
+        try {
+          // InListPassiveTarget command for 106 kbps type A (ISO14443A)
+          const poll = new Uint8Array([
+            0x00, 0x00, 0xFF, 0x04, 0xFC, 
+            0xD4, 0x4A, 0x01, 0x00, // InListPassiveTarget, max 1 target, 106kbps type A
+            0xE1, 0x00
+          ]);
+          await this.writer.write(poll);
+          return true;
+        } catch(e) {
+          return null;
+        }
+      },
+      
+      // Parse UID from PN532 response
+      parseCardUid: function(data) {
+        // Look for PN532 response with UID
+        // Response format: 00 00 FF LEN LCS D5 4B NbTg Tg SENS_RES SEL_RES NFCIDLength NFCID1...
+        for (let i = 0; i < data.length - 10; i++) {
+          if (data[i] === 0xD5 && data[i+1] === 0x4B && data[i+2] >= 1) {
+            const uidLength = data[i+7];
+            if (uidLength >= 4 && uidLength <= 10 && i + 8 + uidLength <= data.length) {
+              const uid = [];
+              for (let j = 0; j < uidLength; j++) {
+                uid.push(data[i + 8 + j].toString(16).padStart(2, '0').toUpperCase());
+              }
+              return uid.join(':');
+            }
+          }
+        }
+        return null;
+      },
+      
+      // Continuous reading loop
+      startReading: async function() {
+        if (!this.reader) return;
+        
+        const buffer = [];
+        
+        while (this.connected) {
+          try {
+            // Poll for card
+            await this.pollForCard();
+            await new Promise(r => setTimeout(r, 100));
+            
+            // Read response
+            const { value, done } = await this.reader.read();
+            if (done) break;
+            
+            if (value) {
+              buffer.push(...value);
+              
+              // Try to parse UID
+              const uid = this.parseCardUid(new Uint8Array(buffer));
+              if (uid && uid !== this.lastCardUid) {
+                this.lastCardUid = uid;
+                console.log('[NFC] Card detected:', uid);
+                
+                // Call callback if set
+                if (this.onCardRead) {
+                  this.onCardRead(uid);
+                }
+                
+                // Clear buffer and wait before next read
+                buffer.length = 0;
+                await new Promise(r => setTimeout(r, 500));
+              }
+              
+              // Trim buffer if too large
+              if (buffer.length > 1024) buffer.splice(0, 512);
+            }
+          } catch(e) {
+            if (e.name !== 'NetworkError') {
+              console.error('[NFC] Read error:', e);
+            }
+            break;
+          }
+        }
+      },
+      
+      // Write data to card (NTAG/MIFARE)
+      writeCard: async function(blockNum, data) {
+        if (!this.writer) return { success: false, error: 'Not connected' };
+        // Implementation depends on card type
+        console.log('[NFC] Write card not yet implemented for this card type');
+        return { success: false, error: 'Write not implemented' };
+      },
+      
+      // Format UID for display
+      formatUid: function(uid) {
+        return uid ? uid.replace(/:/g, '') : '';
+      },
+      
+      // Simulate card read for testing (without hardware)
+      simulateCardRead: function(uid) {
+        uid = uid || '04:' + Math.random().toString(16).substring(2, 14).toUpperCase().match(/.{2}/g).join(':');
+        console.log('[NFC] Simulated card:', uid);
+        this.lastCardUid = uid;
+        if (this.onCardRead) {
+          this.onCardRead(uid);
+        }
+        return uid;
+      }
+    };
+    
+    // ============================================
+    // DOOR ACCESS MODULE (Raspberry Pi GPIO)
+    // Works with electric strikes, mag locks, etc.
+    // ============================================
+    window.DOOR_ACCESS = {
+      // Check access for a card UID
+      checkAccess: async function(cardUid) {
+        const customer = await window.SUPABASE_POS.findCustomerByCard(cardUid);
+        if (!customer) {
+          return { allowed: false, reason: 'Card not registered' };
+        }
+        if (!customer.door_access) {
+          return { allowed: false, reason: 'Door access not enabled', customer };
+        }
+        if (!customer.is_active) {
+          return { allowed: false, reason: 'Account inactive', customer };
+        }
+        
+        // Check access hours if specified
+        if (customer.door_access_hours && customer.door_access_hours !== '24/7') {
+          const now = new Date();
+          const currentTime = now.getHours() * 100 + now.getMinutes();
+          const [start, end] = customer.door_access_hours.split('-').map(t => {
+            const [h, m] = t.trim().split(':');
+            return parseInt(h) * 100 + parseInt(m || 0);
+          });
+          if (currentTime < start || currentTime > end) {
+            return { allowed: false, reason: 'Outside access hours', customer };
+          }
+        }
+        
+        return { allowed: true, customer };
+      },
+      
+      // Log access attempt
+      logAccess: async function(cardUid, allowed, reason) {
+        console.log('[DOOR] Access attempt:', cardUid, allowed ? 'GRANTED' : 'DENIED', reason);
+        // Could log to Supabase here for audit trail
+      },
+      
+      // Unlock door (for Raspberry Pi, would use GPIO)
+      unlock: function(durationMs) {
+        durationMs = durationMs || 5000;
+        console.log('[DOOR] Unlocking for', durationMs, 'ms');
+        // On Raspberry Pi, this would trigger GPIO pin
+        // For web demo, just log it
+        setTimeout(() => {
+          console.log('[DOOR] Re-locking');
+        }, durationMs);
+        return true;
       }
     };
   </script>
@@ -961,7 +1280,10 @@
                 const cat = p.category_id || 'vegetables';
                 if (!grouped[cat]) grouped[cat] = [];
                 grouped[cat].push({
-                  id: p.id, name: p.name, price: parseFloat(p.price), unit: p.unit,
+                  id: p.id, name: p.name, price: parseFloat(p.price), 
+                  cost: p.cost ? parseFloat(p.cost) : null,
+                  markup: p.markup ? parseFloat(p.markup) : null,
+                  unit: p.unit,
                   unitType: p.unit_type, stock: p.stock, minStock: p.min_stock,
                   barcode: p.barcode, image: p.image_url, vendorId: p.vendor_id, category: cat
                 });
@@ -1288,14 +1610,39 @@
       const ProductEditModal = ({ product, onClose }) => {
         const vendorIds = Object.keys(vendors);
         const defaultVendor = vendorIds.length > 0 ? vendorIds[0] : 'farm-store';
-        const [form, setForm] = useState(product || { name: '', price: '', category: 'vegetables', unitType: 'each', unit: 'each', stock: '', barcode: `00${Date.now().toString().slice(-5)}`, vendorId: defaultVendor, minStock: 10 });
+        const [form, setForm] = useState(product || { name: '', price: '', cost: '', markup: 50, category: 'vegetables', unitType: 'each', unit: 'each', stock: '', barcode: `00${Date.now().toString().slice(-5)}`, vendorId: defaultVendor, minStock: 10 });
         const [saving, setSaving] = useState(false);
         const [saveError, setSaveError] = useState(null);
+        const [pricingMode, setPricingMode] = useState(form.cost ? 'markup' : 'manual');
         const selectedUnitType = UNIT_TYPES.find(u => u.id === form.unitType);
+        
+        // Calculate price from cost + markup
+        const calculatePrice = (cost, markup) => {
+          if (!cost || isNaN(parseFloat(cost))) return '';
+          return (parseFloat(cost) * (1 + (parseFloat(markup) || 0) / 100)).toFixed(2);
+        };
+        
+        // Update price when cost or markup changes
+        const updateCostMarkup = (field, value) => {
+          const newForm = { ...form, [field]: value };
+          if (pricingMode === 'markup' && (field === 'cost' || field === 'markup')) {
+            newForm.price = calculatePrice(field === 'cost' ? value : form.cost, field === 'markup' ? value : form.markup);
+          }
+          setForm(newForm);
+        };
+        
         const handleSave = async () => {
           setSaving(true);
           setSaveError(null);
-          const data = { ...form, id: product?.id || `${form.category[0]}${Date.now()}`, price: parseFloat(form.price), stock: parseInt(form.stock) || 0, image: form.image || 'https://images.unsplash.com/photo-1518843875459-f738682238a6?w=300&h=300&fit=crop' };
+          const data = { 
+            ...form, 
+            id: product?.id || `${form.category[0]}${Date.now()}`, 
+            price: parseFloat(form.price), 
+            cost: parseFloat(form.cost) || null,
+            markup: parseFloat(form.markup) || null,
+            stock: parseInt(form.stock) || 0, 
+            image: form.image || 'https://images.unsplash.com/photo-1518843875459-f738682238a6?w=300&h=300&fit=crop' 
+          };
           
           // Save to Supabase if connected
           if (dbStatus.connected && dbStatus.tablesExist) {
@@ -1304,7 +1651,7 @@
               console.error('[POS] Product save failed:', result.error);
               setSaveError(result.error || 'Failed to save');
               setSaving(false);
-              return; // Don't close on error
+              return;
             }
           }
           
@@ -1337,7 +1684,37 @@
             <div style={{ display: 'grid', gap: '12px' }}>
               <div style={{ background: '#f0fdf4', padding: '12px', borderRadius: '8px' }}><label style={{ fontSize: '12px', fontWeight: '600', color: '#0f6e56' }}>Vendor</label><select style={{ ...styles.input, marginTop: '6px' }} value={form.vendorId} onChange={e => setForm({ ...form, vendorId: e.target.value })}>{Object.values(vendors).map(v => <option key={v.id} value={v.id}>{v.name} ({v.commissionRate}%)</option>)}</select></div>
               <input style={styles.input} placeholder="Product name *" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666' }}>Category</label><select style={styles.input} value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>{CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}</select></div><div><label style={{ fontSize: '11px', color: '#666' }}>Price *</label><input style={styles.input} type="number" step="0.01" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} /></div><div><label style={{ fontSize: '11px', color: '#666' }}>Stock</label><input style={styles.input} type="number" value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} /></div></div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666' }}>Category</label><select style={styles.input} value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>{CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}</select></div><div><label style={{ fontSize: '11px', color: '#666' }}>Stock</label><input style={styles.input} type="number" value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} /></div></div>
+              
+              {/* Pricing Section */}
+              <div style={{ background: '#fefce8', padding: '12px', borderRadius: '8px', border: '1px solid #fef08a' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#a16207' }}>💰 Pricing</label>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button type="button" style={{ ...styles.button, padding: '4px 10px', fontSize: '10px', background: pricingMode === 'manual' ? '#0f6e56' : '#e5e7eb', color: pricingMode === 'manual' ? 'white' : '#374151' }} onClick={() => setPricingMode('manual')}>Manual</button>
+                    <button type="button" style={{ ...styles.button, padding: '4px 10px', fontSize: '10px', background: pricingMode === 'markup' ? '#0f6e56' : '#e5e7eb', color: pricingMode === 'markup' ? 'white' : '#374151' }} onClick={() => setPricingMode('markup')}>Cost + Markup</button>
+                  </div>
+                </div>
+                {pricingMode === 'markup' ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                    <div><label style={{ fontSize: '10px', color: '#666' }}>Cost *</label><input style={styles.input} type="number" step="0.01" placeholder="0.00" value={form.cost || ''} onChange={e => updateCostMarkup('cost', e.target.value)} /></div>
+                    <div><label style={{ fontSize: '10px', color: '#666' }}>Markup %</label><input style={styles.input} type="number" value={form.markup || 50} onChange={e => updateCostMarkup('markup', e.target.value)} /></div>
+                    <div><label style={{ fontSize: '10px', color: '#666' }}>Price</label><input style={{ ...styles.input, background: '#f3f4f6', fontWeight: '600' }} type="number" step="0.01" value={form.price} readOnly /></div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div><label style={{ fontSize: '10px', color: '#666' }}>Cost (optional)</label><input style={styles.input} type="number" step="0.01" placeholder="0.00" value={form.cost || ''} onChange={e => setForm({ ...form, cost: e.target.value })} /></div>
+                    <div><label style={{ fontSize: '10px', color: '#666' }}>Price *</label><input style={styles.input} type="number" step="0.01" placeholder="0.00" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} /></div>
+                  </div>
+                )}
+                {form.cost && form.price && (
+                  <div style={{ marginTop: '8px', fontSize: '10px', color: '#666', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Margin: ${(parseFloat(form.price) - parseFloat(form.cost)).toFixed(2)}</span>
+                    <span>Profit: {(((parseFloat(form.price) - parseFloat(form.cost)) / parseFloat(form.price)) * 100).toFixed(1)}%</span>
+                  </div>
+                )}
+              </div>
+              
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666' }}>Unit Type</label><select style={styles.input} value={form.unitType} onChange={e => { const ut = UNIT_TYPES.find(u => u.id === e.target.value); setForm({ ...form, unitType: e.target.value, unit: ut.units[0] }); }}>{UNIT_TYPES.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select></div><div><label style={{ fontSize: '11px', color: '#666' }}>Unit</label><select style={styles.input} value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })}>{selectedUnitType?.units.map(u => <option key={u} value={u}>{u}</option>)}</select></div></div>
               <div><label style={{ fontSize: '11px', color: '#666' }}>SKU / Barcode</label><div style={{ display: 'flex', gap: '8px' }}><input style={{ ...styles.input, flex: 1 }} placeholder="e.g., VEG-12345" value={form.barcode} onChange={e => setForm({ ...form, barcode: e.target.value })} /><button type="button" style={{ ...styles.button, ...styles.secondaryBtn, padding: '8px 12px', fontSize: '11px' }} onClick={generateSKU}>🎲 Generate</button></div></div>
               <div><label style={{ fontSize: '11px', color: '#666' }}>Product Image</label><div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}><input style={{ ...styles.input, flex: 1 }} placeholder="https://example.com/image.jpg" value={form.image || ''} onChange={e => setForm({ ...form, image: e.target.value })} /><label style={{ ...styles.button, ...styles.secondaryBtn, padding: '8px 12px', fontSize: '11px', cursor: 'pointer', margin: 0 }} title="Browse files">📁<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const maxSize = 800; let w = img.width, h = img.height; if (w > maxSize || h > maxSize) { if (w > h) { h = h * maxSize / w; w = maxSize; } else { w = w * maxSize / h; h = maxSize; } } canvas.width = w; canvas.height = h; canvas.getContext('2d').drawImage(img, 0, 0, w, h); setForm({ ...form, image: canvas.toDataURL('image/jpeg', 0.8) }); }; img.src = ev.target.result; }; reader.readAsDataURL(file); } }} /></label><label style={{ ...styles.button, ...styles.secondaryBtn, padding: '8px 12px', fontSize: '11px', cursor: 'pointer', margin: 0 }} title="Take photo">📷<input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const maxSize = 800; let w = img.width, h = img.height; if (w > maxSize || h > maxSize) { if (w > h) { h = h * maxSize / w; w = maxSize; } else { w = w * maxSize / h; h = maxSize; } } canvas.width = w; canvas.height = h; canvas.getContext('2d').drawImage(img, 0, 0, w, h); setForm({ ...form, image: canvas.toDataURL('image/jpeg', 0.8) }); }; img.src = ev.target.result; }; reader.readAsDataURL(file); } }} /></label></div>{form.image && <div style={{ marginTop: '8px', textAlign: 'center' }}><img src={form.image} alt="Preview" style={{ maxWidth: '120px', maxHeight: '80px', borderRadius: '8px', objectFit: 'cover', border: '1px solid #ddd' }} onError={e => e.target.style.display = 'none'} /><button type="button" style={{ display: 'block', margin: '4px auto 0', fontSize: '10px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setForm({ ...form, image: '' })}>✕ Remove</button></div>}</div>
@@ -1681,7 +2058,7 @@
                 <div style={{ padding: '16px', borderRadius: '10px', border: '2px dashed #d1d5db', background: '#f9fafb' }}>
                   <div style={{ fontWeight: '600', marginBottom: '8px' }}>📦 Import Products from CSV</div>
                   <div style={{ fontSize: '11px', color: '#666', marginBottom: '12px' }}>
-                    CSV must have headers: name, price, category, vendorId, stock, unit, unitType, barcode (optional)
+                    CSV must have headers: name, price, category, vendorId, stock, unit, unitType, barcode, cost, markup (optional)
                   </div>
                   <input type="file" accept=".csv" id="csvImportInput" style={{ display: 'none' }} onChange={async (e) => {
                     const file = e.target.files?.[0];
@@ -1705,6 +2082,8 @@
                           id: row.id || `imp${Date.now()}${i}`,
                           name: row.name,
                           price: parseFloat(row.price) || 0,
+                          cost: row.cost ? parseFloat(row.cost) : null,
+                          markup: row.markup ? parseFloat(row.markup) : null,
                           category: row.category || 'vegetables',
                           vendorId: row.vendorid || Object.keys(vendors)[0] || 'farm-store',
                           stock: parseInt(row.stock) || 0,
@@ -1736,7 +2115,7 @@
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button style={{ ...styles.button, ...styles.primaryBtn }} onClick={() => document.getElementById('csvImportInput').click()}>📁 Select CSV File</button>
                     <button style={{ ...styles.button, ...styles.secondaryBtn }} onClick={() => {
-                      const sample = 'name,price,category,vendorId,stock,unit,unitType,barcode\n"Organic Tomatoes",4.99,vegetables,farm-store,50,lb,weight,0001001\n"Fresh Eggs",6.00,eggs,farm-store,30,dozen,dozen,0003001';
+                      const sample = 'name,price,cost,markup,category,vendorId,stock,unit,unitType,barcode\n"Organic Tomatoes",4.99,2.50,100,vegetables,farm-store,50,lb,weight,0001001\n"Fresh Eggs",6.00,3.00,100,eggs,farm-store,30,dozen,dozen,0003001';
                       const blob = new Blob([sample], { type: 'text/csv' });
                       const link = document.createElement('a');
                       link.href = URL.createObjectURL(blob);
@@ -1818,7 +2197,7 @@
               </div>
             </div>)}
 
-            {adminSection === 'database' && (<div style={styles.card}><h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>🗄️ Database Configuration</h3><div style={{ display: 'grid', gap: '12px' }}><div style={{ padding: '12px', borderRadius: '8px', background: dbStatus.connected && dbStatus.tablesExist ? '#dcfce7' : dbStatus.connected ? '#fef3c7' : '#fef2f2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: dbStatus.connected && dbStatus.tablesExist ? '#166534' : dbStatus.connected ? '#92400e' : '#b91c1c' }}>{dbStatus.connected && dbStatus.tablesExist ? '✓ Connected to Supabase' : dbStatus.connected ? '⚠️ Connected but tables missing' : '✗ Not connected'}</div><div style={{ fontSize: '10px', color: '#666' }}>{dbStatus.error || 'Using shared credentials from localStorage'}</div></div><button style={{ ...styles.button, ...(dbStatus.connected ? styles.secondaryBtn : styles.primaryBtn) }} onClick={testDbConnection} disabled={testingDb}>{testingDb ? 'Testing...' : 'Test Connection'}</button></div>{dbStatus.connected && dbStatus.tablesExist && (<><div style={{ padding: '12px', borderRadius: '8px', background: '#f0f9ff', border: '1px solid #bae6fd' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: '#0369a1' }}>🌱 Seed Demo Data</div><div style={{ fontSize: '11px', color: '#666' }}>Populate database with sample vendors and products</div></div><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={async () => { const btn = event.target; btn.disabled = true; btn.textContent = 'Seeding...'; const result = await window.SUPABASE_POS.seedDemoData(); if (result.success) { alert('Demo data seeded! ' + result.vendors + ' vendors, ' + result.products + ' products. Refresh to see changes.'); location.reload(); } else { alert('Error: ' + result.error); btn.disabled = false; btn.textContent = '🌱 Seed Data'; } }}>🌱 Seed Data</button></div></div><div style={{ padding: '12px', borderRadius: '8px', background: '#faf5ff', border: '1px solid #e9d5ff' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: '#7c3aed' }}>🔗 Share Access Link</div><div style={{ fontSize: '11px', color: '#666' }}>Generate a link for other devices/users</div></div><button style={{ ...styles.button, background: '#7c3aed', color: 'white' }} onClick={() => { const creds = JSON.parse(localStorage.getItem('farmhack-supabase-v1') || '{}'); if (creds.url && creds.anonKey) { const shareUrl = window.location.origin + window.location.pathname + '?sb_url=' + encodeURIComponent(creds.url) + '&sb_key=' + encodeURIComponent(creds.anonKey); navigator.clipboard.writeText(shareUrl).then(() => alert('Share link copied to clipboard!\n\nAnyone with this link will auto-connect to your Supabase database.')).catch(() => { prompt('Copy this link:', shareUrl); }); } else { alert('No Supabase credentials found. Configure in Admin Panel first.'); } }}>📋 Copy Link</button></div></div><div style={{ padding: '12px', borderRadius: '8px', background: '#fefce8', border: '1px solid #fef08a' }}><div style={{ fontWeight: '600', color: '#a16207', marginBottom: '8px' }}>📤 Export Data as CSV</div><div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}><button style={{ ...styles.button, ...styles.secondaryBtn, fontSize: '10px', padding: '6px 10px' }} onClick={() => { const data = Object.values(products).flat().map(p => ({ id: p.id, name: p.name, price: p.price, unit: p.unit, unitType: p.unitType, stock: p.stock, barcode: p.barcode, vendorId: p.vendorId, category: p.category })); window.SUPABASE_POS.exportToCSV(data, 'products'); }}>📦 Products</button><button style={{ ...styles.button, ...styles.secondaryBtn, fontSize: '10px', padding: '6px 10px' }} onClick={() => { const data = Object.values(vendors).map(v => ({ id: v.id, name: v.name, type: v.type, commissionRate: v.commissionRate, contact: v.contact, paymentMethod: v.paymentMethod, paymentTerms: v.paymentTerms, active: v.active })); window.SUPABASE_POS.exportToCSV(data, 'vendors'); }}>🤝 Vendors</button><button style={{ ...styles.button, ...styles.secondaryBtn, fontSize: '10px', padding: '6px 10px' }} onClick={() => { const data = transactions.map(t => ({ id: t.id, date: t.date, total: t.total, paymentMethod: t.paymentMethod, itemCount: t.items?.length || 0, cashier: t.cashier })); window.SUPABASE_POS.exportToCSV(data, 'transactions'); }}>🧾 Transactions</button><button style={{ ...styles.button, ...styles.secondaryBtn, fontSize: '10px', padding: '6px 10px' }} onClick={() => { const data = users.map(u => ({ id: u.id, username: u.username, name: u.name, email: u.email, role: u.role, active: u.active })); window.SUPABASE_POS.exportToCSV(data, 'users'); }}>👥 Users</button></div></div><div style={{ padding: '12px', borderRadius: '8px', background: '#ecfdf5', border: '1px solid #a7f3d0' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: '#047857' }}>💾 Full Database Backup</div><div style={{ fontSize: '11px', color: '#666' }}>Download complete database as JSON file</div></div><button style={{ ...styles.button, background: '#047857', color: 'white' }} onClick={async () => { const btn = event.target; btn.disabled = true; btn.textContent = 'Exporting...'; const result = await window.SUPABASE_POS.exportDatabaseBackup(); if (result.success) { alert('Backup complete! Downloaded ' + result.tables + ' tables.'); } else { alert('Error: ' + result.error); } btn.disabled = false; btn.textContent = '💾 Backup'; }}>💾 Backup</button></div></div></>)}<div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Database Type</label><select style={styles.input} value={localSettings.dbType} onChange={e => setLocalSettings({ ...localSettings, dbType: e.target.value })}><option value="supabase">Supabase (Cloud)</option><option value="postgresql">PostgreSQL (Local)</option><option value="sqlite">SQLite (Local)</option></select></div><div style={{ background: '#f0f9ff', padding: '12px', borderRadius: '8px', fontSize: '11px', color: '#0369a1' }}><strong>💡 Tip:</strong> Supabase credentials are shared across all FarmHack apps. Configure them in the Admin Panel.</div><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={saveAdminSettings} disabled={adminSaving}>{adminSaving ? 'Saving...' : '💾 Save Database Settings'}</button></div></div>)}
+            {adminSection === 'database' && (<div style={styles.card}><h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>🗄️ Database Configuration</h3><div style={{ display: 'grid', gap: '12px' }}><div style={{ padding: '12px', borderRadius: '8px', background: dbStatus.connected && dbStatus.tablesExist ? '#dcfce7' : dbStatus.connected ? '#fef3c7' : '#fef2f2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: dbStatus.connected && dbStatus.tablesExist ? '#166534' : dbStatus.connected ? '#92400e' : '#b91c1c' }}>{dbStatus.connected && dbStatus.tablesExist ? '✓ Connected to Supabase' : dbStatus.connected ? '⚠️ Connected but tables missing' : '✗ Not connected'}</div><div style={{ fontSize: '10px', color: '#666' }}>{dbStatus.error || 'Using shared credentials from localStorage'}</div></div><button style={{ ...styles.button, ...(dbStatus.connected ? styles.secondaryBtn : styles.primaryBtn) }} onClick={testDbConnection} disabled={testingDb}>{testingDb ? 'Testing...' : 'Test Connection'}</button></div>{dbStatus.connected && dbStatus.tablesExist && (<><div style={{ padding: '12px', borderRadius: '8px', background: '#f0f9ff', border: '1px solid #bae6fd' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: '#0369a1' }}>🌱 Seed Demo Data</div><div style={{ fontSize: '11px', color: '#666' }}>Populate database with sample vendors and products</div></div><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={async () => { const btn = event.target; btn.disabled = true; btn.textContent = 'Seeding...'; const result = await window.SUPABASE_POS.seedDemoData(); if (result.success) { alert('Demo data seeded! ' + result.vendors + ' vendors, ' + result.products + ' products. Refresh to see changes.'); location.reload(); } else { alert('Error: ' + result.error); btn.disabled = false; btn.textContent = '🌱 Seed Data'; } }}>🌱 Seed Data</button></div></div><div style={{ padding: '12px', borderRadius: '8px', background: '#faf5ff', border: '1px solid #e9d5ff' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: '#7c3aed' }}>🔗 Share Access Link</div><div style={{ fontSize: '11px', color: '#666' }}>Generate a link for other devices/users</div></div><button style={{ ...styles.button, background: '#7c3aed', color: 'white' }} onClick={() => { const creds = JSON.parse(localStorage.getItem('farmhack-supabase-v1') || '{}'); if (creds.url && creds.anonKey) { const shareUrl = window.location.origin + window.location.pathname + '?sb_url=' + encodeURIComponent(creds.url) + '&sb_key=' + encodeURIComponent(creds.anonKey); navigator.clipboard.writeText(shareUrl).then(() => alert('Share link copied to clipboard!\n\nAnyone with this link will auto-connect to your Supabase database.')).catch(() => { prompt('Copy this link:', shareUrl); }); } else { alert('No Supabase credentials found. Configure in Admin Panel first.'); } }}>📋 Copy Link</button></div></div><div style={{ padding: '12px', borderRadius: '8px', background: '#fefce8', border: '1px solid #fef08a' }}><div style={{ fontWeight: '600', color: '#a16207', marginBottom: '8px' }}>📤 Export Data as CSV</div><div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}><button style={{ ...styles.button, ...styles.secondaryBtn, fontSize: '10px', padding: '6px 10px' }} onClick={() => { const data = Object.values(products).flat().map(p => ({ id: p.id, name: p.name, price: p.price, cost: p.cost || '', markup: p.markup || '', unit: p.unit, unitType: p.unitType, stock: p.stock, barcode: p.barcode, vendorId: p.vendorId, category: p.category })); window.SUPABASE_POS.exportToCSV(data, 'products'); }}>📦 Products</button><button style={{ ...styles.button, ...styles.secondaryBtn, fontSize: '10px', padding: '6px 10px' }} onClick={() => { const data = Object.values(vendors).map(v => ({ id: v.id, name: v.name, type: v.type, commissionRate: v.commissionRate, contact: v.contact, paymentMethod: v.paymentMethod, paymentTerms: v.paymentTerms, active: v.active })); window.SUPABASE_POS.exportToCSV(data, 'vendors'); }}>🤝 Vendors</button><button style={{ ...styles.button, ...styles.secondaryBtn, fontSize: '10px', padding: '6px 10px' }} onClick={() => { const data = transactions.map(t => ({ id: t.id, date: t.date, total: t.total, paymentMethod: t.paymentMethod, itemCount: t.items?.length || 0, cashier: t.cashier })); window.SUPABASE_POS.exportToCSV(data, 'transactions'); }}>🧾 Transactions</button><button style={{ ...styles.button, ...styles.secondaryBtn, fontSize: '10px', padding: '6px 10px' }} onClick={() => { const data = users.map(u => ({ id: u.id, username: u.username, name: u.name, email: u.email, role: u.role, active: u.active })); window.SUPABASE_POS.exportToCSV(data, 'users'); }}>👥 Users</button></div></div><div style={{ padding: '12px', borderRadius: '8px', background: '#ecfdf5', border: '1px solid #a7f3d0' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: '#047857' }}>💾 Full Database Backup</div><div style={{ fontSize: '11px', color: '#666' }}>Download complete database as JSON file</div></div><button style={{ ...styles.button, background: '#047857', color: 'white' }} onClick={async () => { const btn = event.target; btn.disabled = true; btn.textContent = 'Exporting...'; const result = await window.SUPABASE_POS.exportDatabaseBackup(); if (result.success) { alert('Backup complete! Downloaded ' + result.tables + ' tables.'); } else { alert('Error: ' + result.error); } btn.disabled = false; btn.textContent = '💾 Backup'; }}>💾 Backup</button></div></div></>)}<div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Database Type</label><select style={styles.input} value={localSettings.dbType} onChange={e => setLocalSettings({ ...localSettings, dbType: e.target.value })}><option value="supabase">Supabase (Cloud)</option><option value="postgresql">PostgreSQL (Local)</option><option value="sqlite">SQLite (Local)</option></select></div><div style={{ background: '#f0f9ff', padding: '12px', borderRadius: '8px', fontSize: '11px', color: '#0369a1' }}><strong>💡 Tip:</strong> Supabase credentials are shared across all FarmHack apps. Configure them in the Admin Panel.</div><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={saveAdminSettings} disabled={adminSaving}>{adminSaving ? 'Saving...' : '💾 Save Database Settings'}</button></div></div>)}
 
             {adminSection === 'farmos' && (<div style={styles.card}><h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>🌱 farmOS Integration</h3><div style={{ display: 'grid', gap: '12px' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8f7f4', borderRadius: '8px' }}><div><span style={{ fontWeight: '600' }}>Enable farmOS Sync</span><div style={{ fontSize: '11px', color: '#666' }}>Sync harvests, sales, and inventory</div></div><button style={{ ...styles.toggle, background: localSettings.farmosEnabled ? '#0f6e56' : '#ccc' }} onClick={() => setLocalSettings({ ...localSettings, farmosEnabled: !localSettings.farmosEnabled })}><div style={{ ...styles.toggleKnob, left: localSettings.farmosEnabled ? '23px' : '3px' }} /></button></div>{localSettings.farmosEnabled && (<><div style={{ padding: '12px', borderRadius: '8px', background: localSettings.farmosStatus === 'connected' ? '#dcfce7' : '#fef3c7', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: localSettings.farmosStatus === 'connected' ? '#166534' : '#92400e' }}>{localSettings.farmosStatus === 'connected' ? '✓ Connected' : '○ Not connected'}</div>{localSettings.farmosLastSync && <div style={{ fontSize: '10px', color: '#666' }}>Last sync: {new Date(localSettings.farmosLastSync).toLocaleString()}</div>}</div><button style={{ ...styles.button, ...styles.secondaryBtn }} onClick={testFarmosConnection} disabled={testingFarmos}>{testingFarmos ? 'Testing...' : 'Test Connection'}</button></div><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>farmOS Server URL</label><input style={styles.input} value={localSettings.farmosUrl} onChange={e => setLocalSettings({ ...localSettings, farmosUrl: e.target.value })} placeholder="https://your-farm.farmos.net" /></div><div style={{ background: '#f8f7f4', padding: '12px', borderRadius: '8px' }}><div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '10px' }}>OAuth 2.0 Credentials</div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '10px', color: '#666' }}>Client ID</label><input style={{ ...styles.input, padding: '8px' }} value={localSettings.farmosClientId} onChange={e => setLocalSettings({ ...localSettings, farmosClientId: e.target.value })} /></div><div><label style={{ fontSize: '10px', color: '#666' }}>Client Secret</label><input style={{ ...styles.input, padding: '8px' }} type="password" value={localSettings.farmosClientSecret} onChange={e => setLocalSettings({ ...localSettings, farmosClientSecret: e.target.value })} /></div></div></div><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><label style={{ fontSize: '12px' }}>Sync Interval:</label><select style={{ ...styles.input, width: '150px' }} value={localSettings.farmosSyncInterval} onChange={e => setLocalSettings({ ...localSettings, farmosSyncInterval: parseInt(e.target.value) })}><option value={5}>Every 5 minutes</option><option value={15}>Every 15 minutes</option><option value={30}>Every 30 minutes</option><option value={60}>Every hour</option></select></div><div style={{ background: '#f0fdf4', padding: '12px', borderRadius: '8px' }}><div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px', color: '#0f6e56' }}>Sync Options</div><div style={{ display: 'grid', gap: '6px' }}><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}><input type="checkbox" checked={localSettings.farmosSyncHarvests} onChange={e => setLocalSettings({ ...localSettings, farmosSyncHarvests: e.target.checked })} /> Harvest logs → Inventory</label><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}><input type="checkbox" checked={localSettings.farmosSyncSales} onChange={e => setLocalSettings({ ...localSettings, farmosSyncSales: e.target.checked })} /> Sales → farmOS observations</label><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}><input type="checkbox" checked={localSettings.farmosSyncInventory} onChange={e => setLocalSettings({ ...localSettings, farmosSyncInventory: e.target.checked })} /> Import farmOS assets as products</label></div></div></>)}<button style={{ ...styles.button, ...styles.primaryBtn }} onClick={saveAdminSettings} disabled={adminSaving}>{adminSaving ? 'Saving...' : '💾 Save farmOS Settings'}</button></div></div>)}
           </div>
