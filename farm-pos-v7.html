@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Farm POS v7.7</title>
+  <title>Farm POS v7.8</title>
   <meta name="description" content="Cooperative Farm Store POS with multi-vendor consignment, role-based access, and peripheral device management">
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
@@ -19,7 +19,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
   
   <script>
-    console.log('[POS] === VERSION 7.7 LOADING ===');
+    console.log('[POS] === VERSION 7.8 LOADING ===');
     
     // Check for URL parameters to set Supabase credentials
     (function() {
@@ -1615,7 +1615,7 @@
         const testDbConnection = async () => { setTestingDb(true); await new Promise(r => setTimeout(r, 1500)); setLocalSettings(s => ({ ...s, dbConnected: true, dbLastSync: new Date().toISOString() })); setTestingDb(false); };
         const testFarmosConnection = async () => { setTestingFarmos(true); await new Promise(r => setTimeout(r, 1500)); setLocalSettings(s => ({ ...s, farmosStatus: s.farmosUrl ? 'connected' : 'disconnected', farmosLastSync: new Date().toISOString() })); setTestingFarmos(false); };
 
-        const adminSections = [{ id: 'store', label: '🏪 Store' }, { id: 'users', label: '👥 Users' }, { id: 'devices', label: '🔌 Devices' }, { id: 'payments', label: '💳 Payments' }, { id: 'database', label: '🗄️ Database' }, { id: 'farmos', label: '🌱 farmOS' }];
+        const adminSections = [{ id: 'store', label: '🏪 Store' }, { id: 'users', label: '👥 Users' }, { id: 'devices', label: '🔌 Devices' }, { id: 'payments', label: '💳 Payments' }, { id: 'transactions', label: '🧾 Transactions' }, { id: 'import', label: '📥 Import' }, { id: 'database', label: '🗄️ Database' }, { id: 'farmos', label: '🌱 farmOS' }];
 
         return (
           <div style={{ padding: '16px', maxWidth: '1000px', margin: '0 auto' }}>
@@ -1629,6 +1629,194 @@
             {adminSection === 'devices' && (<div style={styles.card}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}><h3 style={{ margin: 0, fontSize: '15px' }}>🔌 Peripheral Devices</h3><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={() => setEditingDevice({})}>➕ Add Device</button></div><div style={{ display: 'grid', gap: '8px' }}>{devices.map(device => { const icons = { scanner: '📷', printer: '🖨️', scale: '⚖️', cashDrawer: '💵', cardReader: '💳', labelPrinter: '🏷️', customerDisplay: '🖥️' }; return (<div key={device.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderRadius: '10px', border: `2px solid ${device.status === 'connected' ? '#22c55e' : '#f59e0b'}`, background: device.enabled ? 'white' : '#f9fafb', opacity: device.enabled ? 1 : 0.7, cursor: 'pointer' }} onClick={() => setEditingDevice(device)}><div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><span style={{ fontSize: '24px' }}>{icons[device.type]}</span><div><div style={{ fontWeight: '600', fontSize: '13px' }}>{device.name}</div><div style={{ fontSize: '10px', color: '#666' }}>{device.model} • {device.connection.toUpperCase()}</div></div></div><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><span style={{ padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: '600', background: device.status === 'connected' ? '#dcfce7' : '#fef3c7', color: device.status === 'connected' ? '#166534' : '#92400e' }}>{device.status}</span></div></div>); })}</div></div>)}
 
             {adminSection === 'payments' && (<div style={styles.card}><h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>💳 Payment Processing</h3><div style={{ display: 'grid', gap: '12px' }}><div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Select Payment Processor</div><div style={{ display: 'grid', gap: '8px' }}>{PAYMENT_PROCESSORS.map(proc => (<div key={proc.id} onClick={() => setLocalSettings({ ...localSettings, paymentProcessor: proc.id })} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px', borderRadius: '10px', border: localSettings.paymentProcessor === proc.id ? '2px solid #0f6e56' : '2px solid #e0ddd5', cursor: 'pointer', background: localSettings.paymentProcessor === proc.id ? '#f0fdf4' : 'white' }}><div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><span style={{ fontSize: '24px' }}>{proc.logo}</span><div><div style={{ fontWeight: '600', fontSize: '14px' }}>{proc.name} {proc.recommended && <span style={{ color: '#0f6e56', fontSize: '12px' }}>★ Recommended</span>}</div><div style={{ fontSize: '11px', color: '#666' }}>{proc.features}</div></div></div><div style={{ textAlign: 'right' }}><div style={{ fontWeight: '700', color: '#0f6e56' }}>{proc.rate}</div><div style={{ fontSize: '10px', color: '#888' }}>per transaction</div></div></div>))}</div><div style={{ borderTop: '1px solid #eee', paddingTop: '12px', marginTop: '4px' }}><h4 style={{ margin: '0 0 10px', fontSize: '13px' }}>API Configuration</h4><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>API Key / Secret Key</label><input style={styles.input} type="password" placeholder={`${localSettings.paymentProcessor} API key`} value={localSettings.paymentApiKey} onChange={e => setLocalSettings({ ...localSettings, paymentApiKey: e.target.value })} /></div><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', marginTop: '10px' }}><input type="checkbox" checked={localSettings.paymentTestMode} onChange={e => setLocalSettings({ ...localSettings, paymentTestMode: e.target.checked })} /> Test Mode (no real charges)</label></div><div style={{ background: '#f0f9ff', padding: '12px', borderRadius: '8px', fontSize: '11px', color: '#0369a1' }}><strong>💡 Recommended for Self-Service:</strong> Stripe Terminal M2 ($59) - tap/chip/swipe, Bluetooth, best API for unattended payments.</div><button style={{ ...styles.button, ...styles.primaryBtn, marginTop: '8px' }} onClick={saveAdminSettings} disabled={adminSaving}>{adminSaving ? 'Saving...' : '💾 Save Payment Settings'}</button></div></div>)}
+
+            {adminSection === 'transactions' && (<div style={styles.card}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ margin: 0, fontSize: '15px' }}>🧾 Transaction History</h3>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button style={{ ...styles.button, ...styles.secondaryBtn, fontSize: '10px' }} onClick={() => { const data = transactions.map(t => ({ id: t.id, date: t.date, total: t.total, paymentMethod: t.paymentMethod, itemCount: t.items?.length || 0, cashier: t.cashier })); window.SUPABASE_POS.exportToCSV(data, 'transactions'); }}>📤 Export CSV</button>
+                </div>
+              </div>
+              <div style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>{transactions.length} transaction(s) loaded from database</div>
+              <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+                {transactions.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>No transactions found</div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                    <thead><tr style={{ background: '#f8f7f4', position: 'sticky', top: 0 }}>
+                      <th style={{ padding: '10px', textAlign: 'left', fontWeight: '600' }}>Date/Time</th>
+                      <th style={{ padding: '10px', textAlign: 'left', fontWeight: '600' }}>ID</th>
+                      <th style={{ padding: '10px', textAlign: 'right', fontWeight: '600' }}>Items</th>
+                      <th style={{ padding: '10px', textAlign: 'right', fontWeight: '600' }}>Total</th>
+                      <th style={{ padding: '10px', textAlign: 'center', fontWeight: '600' }}>Payment</th>
+                      <th style={{ padding: '10px', textAlign: 'left', fontWeight: '600' }}>Cashier</th>
+                      <th style={{ padding: '10px', textAlign: 'center', fontWeight: '600' }}>Actions</th>
+                    </tr></thead>
+                    <tbody>
+                      {transactions.map(tx => (
+                        <tr key={tx.id} style={{ borderBottom: '1px solid #eee' }}>
+                          <td style={{ padding: '10px' }}>{new Date(tx.date || tx.created_at).toLocaleString()}</td>
+                          <td style={{ padding: '10px', fontFamily: 'monospace', fontSize: '10px' }}>{tx.id?.substring(0, 8)}...</td>
+                          <td style={{ padding: '10px', textAlign: 'right' }}>{tx.items?.length || 0}</td>
+                          <td style={{ padding: '10px', textAlign: 'right', fontWeight: '600' }}>${(tx.total || 0).toFixed(2)}</td>
+                          <td style={{ padding: '10px', textAlign: 'center' }}><span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '9px', background: tx.paymentMethod === 'cash' ? '#dcfce7' : '#e0e7ff', color: tx.paymentMethod === 'cash' ? '#166534' : '#4338ca' }}>{tx.paymentMethod}</span></td>
+                          <td style={{ padding: '10px' }}>{tx.cashier || 'N/A'}</td>
+                          <td style={{ padding: '10px', textAlign: 'center' }}>
+                            <button style={{ ...styles.button, ...styles.secondaryBtn, padding: '4px 8px', fontSize: '9px' }} onClick={() => {
+                              const items = tx.items || [];
+                              alert('Transaction Details:\n\nID: ' + tx.id + '\nDate: ' + new Date(tx.date || tx.created_at).toLocaleString() + '\nTotal: $' + (tx.total || 0).toFixed(2) + '\nPayment: ' + tx.paymentMethod + '\nCashier: ' + (tx.cashier || 'N/A') + '\n\nItems (' + items.length + '):\n' + items.map(i => '  • ' + i.name + ' x' + i.qty + ' = $' + (i.total || 0).toFixed(2)).join('\n'));
+                            }}>👁️ View</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>)}
+
+            {adminSection === 'import' && (<div style={styles.card}>
+              <h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>📥 Import Data</h3>
+              <div style={{ display: 'grid', gap: '16px' }}>
+                <div style={{ padding: '16px', borderRadius: '10px', border: '2px dashed #d1d5db', background: '#f9fafb' }}>
+                  <div style={{ fontWeight: '600', marginBottom: '8px' }}>📦 Import Products from CSV</div>
+                  <div style={{ fontSize: '11px', color: '#666', marginBottom: '12px' }}>
+                    CSV must have headers: name, price, category, vendorId, stock, unit, unitType, barcode (optional)
+                  </div>
+                  <input type="file" accept=".csv" id="csvImportInput" style={{ display: 'none' }} onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const text = await file.text();
+                    const lines = text.trim().split('\n');
+                    if (lines.length < 2) { alert('CSV must have header row and at least one data row'); return; }
+                    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''));
+                    const requiredHeaders = ['name', 'price', 'category', 'vendorid'];
+                    const missing = requiredHeaders.filter(h => !headers.includes(h));
+                    if (missing.length > 0) { alert('Missing required columns: ' + missing.join(', ')); return; }
+                    
+                    let imported = 0, errors = 0;
+                    for (let i = 1; i < lines.length; i++) {
+                      try {
+                        const values = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g)?.map(v => v.replace(/^"|"$/g, '').trim()) || [];
+                        const row = {};
+                        headers.forEach((h, idx) => { row[h] = values[idx] || ''; });
+                        
+                        const product = {
+                          id: row.id || `imp${Date.now()}${i}`,
+                          name: row.name,
+                          price: parseFloat(row.price) || 0,
+                          category: row.category || 'vegetables',
+                          vendorId: row.vendorid || Object.keys(vendors)[0] || 'farm-store',
+                          stock: parseInt(row.stock) || 0,
+                          unit: row.unit || 'each',
+                          unitType: row.unittype || 'each',
+                          barcode: row.barcode || `00${Date.now().toString().slice(-5)}${i}`,
+                          minStock: parseInt(row.minstock) || 10,
+                          image: row.image || 'https://images.unsplash.com/photo-1518843875459-f738682238a6?w=300&h=300&fit=crop'
+                        };
+                        
+                        if (!product.name || !product.price) { errors++; continue; }
+                        
+                        if (dbStatus.connected && dbStatus.tablesExist) {
+                          await window.SUPABASE_POS.saveProduct(product);
+                        }
+                        
+                        if (!PRODUCTS[product.category]) PRODUCTS[product.category] = [];
+                        const existingIdx = PRODUCTS[product.category].findIndex(p => p.id === product.id);
+                        if (existingIdx >= 0) { PRODUCTS[product.category][existingIdx] = product; }
+                        else { PRODUCTS[product.category].push(product); }
+                        imported++;
+                      } catch (err) { console.error('Import row error:', err); errors++; }
+                    }
+                    
+                    setProducts({ ...PRODUCTS });
+                    alert('Import complete!\n\n✓ Imported: ' + imported + ' products\n✗ Errors: ' + errors);
+                    e.target.value = '';
+                  }} />
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button style={{ ...styles.button, ...styles.primaryBtn }} onClick={() => document.getElementById('csvImportInput').click()}>📁 Select CSV File</button>
+                    <button style={{ ...styles.button, ...styles.secondaryBtn }} onClick={() => {
+                      const sample = 'name,price,category,vendorId,stock,unit,unitType,barcode\n"Organic Tomatoes",4.99,vegetables,farm-store,50,lb,weight,0001001\n"Fresh Eggs",6.00,eggs,farm-store,30,dozen,dozen,0003001';
+                      const blob = new Blob([sample], { type: 'text/csv' });
+                      const link = document.createElement('a');
+                      link.href = URL.createObjectURL(blob);
+                      link.download = 'products_template.csv';
+                      link.click();
+                    }}>📄 Download Template</button>
+                  </div>
+                </div>
+                
+                <div style={{ padding: '16px', borderRadius: '10px', border: '2px dashed #d1d5db', background: '#f9fafb' }}>
+                  <div style={{ fontWeight: '600', marginBottom: '8px' }}>🤝 Import Vendors from CSV</div>
+                  <div style={{ fontSize: '11px', color: '#666', marginBottom: '12px' }}>
+                    CSV must have headers: name, type, commissionRate, contact, paymentMethod, paymentTerms
+                  </div>
+                  <input type="file" accept=".csv" id="vendorCsvImportInput" style={{ display: 'none' }} onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const text = await file.text();
+                    const lines = text.trim().split('\n');
+                    if (lines.length < 2) { alert('CSV must have header row and at least one data row'); return; }
+                    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''));
+                    
+                    let imported = 0, errors = 0;
+                    for (let i = 1; i < lines.length; i++) {
+                      try {
+                        const values = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g)?.map(v => v.replace(/^"|"$/g, '').trim()) || [];
+                        const row = {};
+                        headers.forEach((h, idx) => { row[h] = values[idx] || ''; });
+                        
+                        const vendor = {
+                          id: row.id || row.name?.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || `v${Date.now()}${i}`,
+                          name: row.name,
+                          type: row.type || 'consignment',
+                          commissionRate: parseFloat(row.commissionrate) || 15,
+                          contact: row.contact || '',
+                          paymentMethod: row.paymentmethod || 'check',
+                          paymentTerms: row.paymentterms || 'net-15',
+                          color: row.color || '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'),
+                          active: true
+                        };
+                        
+                        if (!vendor.name) { errors++; continue; }
+                        
+                        if (dbStatus.connected && dbStatus.tablesExist) {
+                          await window.SUPABASE_POS.saveVendor(vendor);
+                        }
+                        
+                        VENDORS[vendor.id] = vendor;
+                        imported++;
+                      } catch (err) { console.error('Import row error:', err); errors++; }
+                    }
+                    
+                    setVendors({ ...VENDORS });
+                    alert('Import complete!\n\n✓ Imported: ' + imported + ' vendors\n✗ Errors: ' + errors);
+                    e.target.value = '';
+                  }} />
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button style={{ ...styles.button, ...styles.primaryBtn }} onClick={() => document.getElementById('vendorCsvImportInput').click()}>📁 Select CSV File</button>
+                    <button style={{ ...styles.button, ...styles.secondaryBtn }} onClick={() => {
+                      const sample = 'name,type,commissionRate,contact,paymentMethod,paymentTerms\n"Sunny Acres Farm",consignment,15,sunny@farm.com,check,net-15\n"Hilltop Dairy",consignment,12,hilltop@dairy.com,ach,net-30';
+                      const blob = new Blob([sample], { type: 'text/csv' });
+                      const link = document.createElement('a');
+                      link.href = URL.createObjectURL(blob);
+                      link.download = 'vendors_template.csv';
+                      link.click();
+                    }}>📄 Download Template</button>
+                  </div>
+                </div>
+                
+                <div style={{ background: '#f0f9ff', padding: '12px', borderRadius: '8px', fontSize: '11px', color: '#0369a1' }}>
+                  <strong>💡 Tips:</strong>
+                  <ul style={{ margin: '8px 0 0 0', paddingLeft: '16px' }}>
+                    <li>Export existing data first to see the expected format</li>
+                    <li>Use quotes around values containing commas</li>
+                    <li>vendorId must match an existing vendor ID</li>
+                    <li>Products will be updated if ID already exists</li>
+                  </ul>
+                </div>
+              </div>
+            </div>)}
 
             {adminSection === 'database' && (<div style={styles.card}><h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>🗄️ Database Configuration</h3><div style={{ display: 'grid', gap: '12px' }}><div style={{ padding: '12px', borderRadius: '8px', background: dbStatus.connected && dbStatus.tablesExist ? '#dcfce7' : dbStatus.connected ? '#fef3c7' : '#fef2f2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: dbStatus.connected && dbStatus.tablesExist ? '#166534' : dbStatus.connected ? '#92400e' : '#b91c1c' }}>{dbStatus.connected && dbStatus.tablesExist ? '✓ Connected to Supabase' : dbStatus.connected ? '⚠️ Connected but tables missing' : '✗ Not connected'}</div><div style={{ fontSize: '10px', color: '#666' }}>{dbStatus.error || 'Using shared credentials from localStorage'}</div></div><button style={{ ...styles.button, ...(dbStatus.connected ? styles.secondaryBtn : styles.primaryBtn) }} onClick={testDbConnection} disabled={testingDb}>{testingDb ? 'Testing...' : 'Test Connection'}</button></div>{dbStatus.connected && dbStatus.tablesExist && (<><div style={{ padding: '12px', borderRadius: '8px', background: '#f0f9ff', border: '1px solid #bae6fd' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: '#0369a1' }}>🌱 Seed Demo Data</div><div style={{ fontSize: '11px', color: '#666' }}>Populate database with sample vendors and products</div></div><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={async () => { const btn = event.target; btn.disabled = true; btn.textContent = 'Seeding...'; const result = await window.SUPABASE_POS.seedDemoData(); if (result.success) { alert('Demo data seeded! ' + result.vendors + ' vendors, ' + result.products + ' products. Refresh to see changes.'); location.reload(); } else { alert('Error: ' + result.error); btn.disabled = false; btn.textContent = '🌱 Seed Data'; } }}>🌱 Seed Data</button></div></div><div style={{ padding: '12px', borderRadius: '8px', background: '#faf5ff', border: '1px solid #e9d5ff' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: '#7c3aed' }}>🔗 Share Access Link</div><div style={{ fontSize: '11px', color: '#666' }}>Generate a link for other devices/users</div></div><button style={{ ...styles.button, background: '#7c3aed', color: 'white' }} onClick={() => { const creds = JSON.parse(localStorage.getItem('farmhack-supabase-v1') || '{}'); if (creds.url && creds.anonKey) { const shareUrl = window.location.origin + window.location.pathname + '?sb_url=' + encodeURIComponent(creds.url) + '&sb_key=' + encodeURIComponent(creds.anonKey); navigator.clipboard.writeText(shareUrl).then(() => alert('Share link copied to clipboard!\n\nAnyone with this link will auto-connect to your Supabase database.')).catch(() => { prompt('Copy this link:', shareUrl); }); } else { alert('No Supabase credentials found. Configure in Admin Panel first.'); } }}>📋 Copy Link</button></div></div><div style={{ padding: '12px', borderRadius: '8px', background: '#fefce8', border: '1px solid #fef08a' }}><div style={{ fontWeight: '600', color: '#a16207', marginBottom: '8px' }}>📤 Export Data as CSV</div><div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}><button style={{ ...styles.button, ...styles.secondaryBtn, fontSize: '10px', padding: '6px 10px' }} onClick={() => { const data = Object.values(products).flat().map(p => ({ id: p.id, name: p.name, price: p.price, unit: p.unit, unitType: p.unitType, stock: p.stock, barcode: p.barcode, vendorId: p.vendorId, category: p.category })); window.SUPABASE_POS.exportToCSV(data, 'products'); }}>📦 Products</button><button style={{ ...styles.button, ...styles.secondaryBtn, fontSize: '10px', padding: '6px 10px' }} onClick={() => { const data = Object.values(vendors).map(v => ({ id: v.id, name: v.name, type: v.type, commissionRate: v.commissionRate, contact: v.contact, paymentMethod: v.paymentMethod, paymentTerms: v.paymentTerms, active: v.active })); window.SUPABASE_POS.exportToCSV(data, 'vendors'); }}>🤝 Vendors</button><button style={{ ...styles.button, ...styles.secondaryBtn, fontSize: '10px', padding: '6px 10px' }} onClick={() => { const data = transactions.map(t => ({ id: t.id, date: t.date, total: t.total, paymentMethod: t.paymentMethod, itemCount: t.items?.length || 0, cashier: t.cashier })); window.SUPABASE_POS.exportToCSV(data, 'transactions'); }}>🧾 Transactions</button><button style={{ ...styles.button, ...styles.secondaryBtn, fontSize: '10px', padding: '6px 10px' }} onClick={() => { const data = users.map(u => ({ id: u.id, username: u.username, name: u.name, email: u.email, role: u.role, active: u.active })); window.SUPABASE_POS.exportToCSV(data, 'users'); }}>👥 Users</button></div></div><div style={{ padding: '12px', borderRadius: '8px', background: '#ecfdf5', border: '1px solid #a7f3d0' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: '#047857' }}>💾 Full Database Backup</div><div style={{ fontSize: '11px', color: '#666' }}>Download complete database as JSON file</div></div><button style={{ ...styles.button, background: '#047857', color: 'white' }} onClick={async () => { const btn = event.target; btn.disabled = true; btn.textContent = 'Exporting...'; const result = await window.SUPABASE_POS.exportDatabaseBackup(); if (result.success) { alert('Backup complete! Downloaded ' + result.tables + ' tables.'); } else { alert('Error: ' + result.error); } btn.disabled = false; btn.textContent = '💾 Backup'; }}>💾 Backup</button></div></div></>)}<div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Database Type</label><select style={styles.input} value={localSettings.dbType} onChange={e => setLocalSettings({ ...localSettings, dbType: e.target.value })}><option value="supabase">Supabase (Cloud)</option><option value="postgresql">PostgreSQL (Local)</option><option value="sqlite">SQLite (Local)</option></select></div><div style={{ background: '#f0f9ff', padding: '12px', borderRadius: '8px', fontSize: '11px', color: '#0369a1' }}><strong>💡 Tip:</strong> Supabase credentials are shared across all FarmHack apps. Configure them in the Admin Panel.</div><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={saveAdminSettings} disabled={adminSaving}>{adminSaving ? 'Saving...' : '💾 Save Database Settings'}</button></div></div>)}
 
