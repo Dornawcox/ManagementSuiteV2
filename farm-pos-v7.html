@@ -13,6 +13,7 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -905,6 +906,166 @@
         return true;
       }
     };
+    
+    // ============================================
+    // BARCODE PRINTING MODULE
+    // Generates and prints product barcode labels
+    // ============================================
+    window.BARCODE_PRINTER = {
+      // Print a single product barcode
+      printBarcode: function(product, options) {
+        options = options || {};
+        const qty = options.quantity || 1;
+        const labelWidth = options.labelWidth || '2in';
+        const labelHeight = options.labelHeight || '1in';
+        const showPrice = options.showPrice !== false;
+        const showName = options.showName !== false;
+        
+        // Create print window
+        const printWindow = window.open('', '_blank', 'width=400,height=300');
+        if (!printWindow) {
+          alert('Please allow popups to print barcodes');
+          return false;
+        }
+        
+        // Generate labels HTML
+        let labelsHtml = '';
+        for (let i = 0; i < qty; i++) {
+          labelsHtml += `
+            <div class="label" style="width: ${labelWidth}; height: ${labelHeight}; padding: 4px; box-sizing: border-box; page-break-inside: avoid; display: inline-block; text-align: center; border: 1px dashed #ccc; margin: 2px;">
+              ${showName ? `<div style="font-size: 10px; font-weight: bold; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${product.name}</div>` : ''}
+              <svg class="barcode" data-code="${product.barcode || product.id}"></svg>
+              <div style="font-size: 8px; margin-top: 1px;">${product.barcode || product.id}</div>
+              ${showPrice ? `<div style="font-size: 12px; font-weight: bold;">$${parseFloat(product.price).toFixed(2)}${product.unit && product.unit !== 'each' ? '/' + product.unit : ''}</div>` : ''}
+            </div>
+          `;
+        }
+        
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Barcode Labels - ${product.name}</title>
+            <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
+            <style>
+              @page { margin: 0.25in; }
+              body { font-family: Arial, sans-serif; margin: 0; padding: 8px; }
+              @media print {
+                .no-print { display: none; }
+                .label { border: none !important; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="no-print" style="margin-bottom: 10px; padding: 10px; background: #f0f0f0; border-radius: 8px;">
+              <strong>${product.name}</strong> - ${qty} label(s)
+              <button onclick="window.print()" style="margin-left: 10px; padding: 6px 16px; cursor: pointer;">🖨️ Print</button>
+              <button onclick="window.close()" style="margin-left: 5px; padding: 6px 12px; cursor: pointer;">✕ Close</button>
+            </div>
+            <div id="labels">${labelsHtml}</div>
+            <script>
+              document.querySelectorAll('.barcode').forEach(svg => {
+                try {
+                  JsBarcode(svg, svg.dataset.code, {
+                    format: 'CODE128',
+                    width: 1.5,
+                    height: 30,
+                    displayValue: false,
+                    margin: 0
+                  });
+                } catch(e) {
+                  console.error('Barcode error:', e);
+                }
+              });
+            <\/script>
+          </body>
+          </html>
+        `);
+        printWindow.document.close();
+        
+        return true;
+      },
+      
+      // Print multiple products (batch)
+      printBatch: function(products, options) {
+        options = options || {};
+        const labelWidth = options.labelWidth || '2in';
+        const labelHeight = options.labelHeight || '1in';
+        
+        const printWindow = window.open('', '_blank', 'width=600,height=400');
+        if (!printWindow) {
+          alert('Please allow popups to print barcodes');
+          return false;
+        }
+        
+        let labelsHtml = '';
+        products.forEach(product => {
+          const qty = product.printQty || 1;
+          for (let i = 0; i < qty; i++) {
+            labelsHtml += `
+              <div class="label" style="width: ${labelWidth}; height: ${labelHeight}; padding: 4px; box-sizing: border-box; page-break-inside: avoid; display: inline-block; text-align: center; border: 1px dashed #ccc; margin: 2px;">
+                <div style="font-size: 10px; font-weight: bold; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${product.name}</div>
+                <svg class="barcode" data-code="${product.barcode || product.id}"></svg>
+                <div style="font-size: 8px; margin-top: 1px;">${product.barcode || product.id}</div>
+                <div style="font-size: 12px; font-weight: bold;">$${parseFloat(product.price).toFixed(2)}${product.unit && product.unit !== 'each' ? '/' + product.unit : ''}</div>
+              </div>
+            `;
+          }
+        });
+        
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Barcode Labels Batch</title>
+            <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
+            <style>
+              @page { margin: 0.25in; }
+              body { font-family: Arial, sans-serif; margin: 0; padding: 8px; }
+              @media print {
+                .no-print { display: none; }
+                .label { border: none !important; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="no-print" style="margin-bottom: 10px; padding: 10px; background: #f0f0f0; border-radius: 8px;">
+              <strong>${products.length} product(s)</strong>
+              <button onclick="window.print()" style="margin-left: 10px; padding: 6px 16px; cursor: pointer;">🖨️ Print</button>
+              <button onclick="window.close()" style="margin-left: 5px; padding: 6px 12px; cursor: pointer;">✕ Close</button>
+            </div>
+            <div id="labels">${labelsHtml}</div>
+            <script>
+              document.querySelectorAll('.barcode').forEach(svg => {
+                try {
+                  JsBarcode(svg, svg.dataset.code, {
+                    format: 'CODE128',
+                    width: 1.5,
+                    height: 30,
+                    displayValue: false,
+                    margin: 0
+                  });
+                } catch(e) {
+                  console.error('Barcode error:', e);
+                }
+              });
+            <\/script>
+          </body>
+          </html>
+        `);
+        printWindow.document.close();
+        
+        return true;
+      },
+      
+      // Show barcode preview/print dialog
+      showPrintDialog: function(product) {
+        const qty = prompt('How many labels to print?', '1');
+        if (qty && parseInt(qty) > 0) {
+          this.printBarcode(product, { quantity: parseInt(qty) });
+        }
+      }
+    };
   </script>
   
   <style>
@@ -1718,7 +1879,7 @@
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666' }}>Unit Type</label><select style={styles.input} value={form.unitType} onChange={e => { const ut = UNIT_TYPES.find(u => u.id === e.target.value); setForm({ ...form, unitType: e.target.value, unit: ut.units[0] }); }}>{UNIT_TYPES.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select></div><div><label style={{ fontSize: '11px', color: '#666' }}>Unit</label><select style={styles.input} value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })}>{selectedUnitType?.units.map(u => <option key={u} value={u}>{u}</option>)}</select></div></div>
               <div><label style={{ fontSize: '11px', color: '#666' }}>SKU / Barcode</label><div style={{ display: 'flex', gap: '8px' }}><input style={{ ...styles.input, flex: 1 }} placeholder="e.g., VEG-12345" value={form.barcode} onChange={e => setForm({ ...form, barcode: e.target.value })} /><button type="button" style={{ ...styles.button, ...styles.secondaryBtn, padding: '8px 12px', fontSize: '11px' }} onClick={generateSKU}>🎲 Generate</button></div></div>
               <div><label style={{ fontSize: '11px', color: '#666' }}>Product Image</label><div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}><input style={{ ...styles.input, flex: 1 }} placeholder="https://example.com/image.jpg" value={form.image || ''} onChange={e => setForm({ ...form, image: e.target.value })} /><label style={{ ...styles.button, ...styles.secondaryBtn, padding: '8px 12px', fontSize: '11px', cursor: 'pointer', margin: 0 }} title="Browse files">📁<input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const maxSize = 800; let w = img.width, h = img.height; if (w > maxSize || h > maxSize) { if (w > h) { h = h * maxSize / w; w = maxSize; } else { w = w * maxSize / h; h = maxSize; } } canvas.width = w; canvas.height = h; canvas.getContext('2d').drawImage(img, 0, 0, w, h); setForm({ ...form, image: canvas.toDataURL('image/jpeg', 0.8) }); }; img.src = ev.target.result; }; reader.readAsDataURL(file); } }} /></label><label style={{ ...styles.button, ...styles.secondaryBtn, padding: '8px 12px', fontSize: '11px', cursor: 'pointer', margin: 0 }} title="Take photo">📷<input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const maxSize = 800; let w = img.width, h = img.height; if (w > maxSize || h > maxSize) { if (w > h) { h = h * maxSize / w; w = maxSize; } else { w = w * maxSize / h; h = maxSize; } } canvas.width = w; canvas.height = h; canvas.getContext('2d').drawImage(img, 0, 0, w, h); setForm({ ...form, image: canvas.toDataURL('image/jpeg', 0.8) }); }; img.src = ev.target.result; }; reader.readAsDataURL(file); } }} /></label></div>{form.image && <div style={{ marginTop: '8px', textAlign: 'center' }}><img src={form.image} alt="Preview" style={{ maxWidth: '120px', maxHeight: '80px', borderRadius: '8px', objectFit: 'cover', border: '1px solid #ddd' }} onError={e => e.target.style.display = 'none'} /><button type="button" style={{ display: 'block', margin: '4px auto 0', fontSize: '10px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setForm({ ...form, image: '' })}>✕ Remove</button></div>}</div>
-              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>{product?.id && <button style={{ ...styles.button, ...styles.dangerBtn }} onClick={handleDelete}>Delete</button>}<button style={{ ...styles.button, ...styles.secondaryBtn, flex: 1 }} onClick={onClose}>Cancel</button><button style={{ ...styles.button, ...styles.primaryBtn, flex: 2 }} onClick={handleSave} disabled={!form.name || !form.price || saving}>{saving ? 'Saving...' : 'Save'}</button></div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>{product?.id && <button style={{ ...styles.button, ...styles.dangerBtn }} onClick={handleDelete}>Delete</button>}{product?.id && <button style={{ ...styles.button, background: '#6366f1', color: 'white' }} onClick={() => window.BARCODE_PRINTER.showPrintDialog(form)} title="Print barcode labels">🏷️ Print</button>}<button style={{ ...styles.button, ...styles.secondaryBtn, flex: 1 }} onClick={onClose}>Cancel</button><button style={{ ...styles.button, ...styles.primaryBtn, flex: 2 }} onClick={handleSave} disabled={!form.name || !form.price || saving}>{saving ? 'Saving...' : 'Save'}</button></div>
             </div>
           </div></div>
         );
@@ -1966,8 +2127,8 @@
         const filtered = vendorFilter === 'all' ? allProducts : allProducts.filter(p => p.vendorId === vendorFilter);
         return (
           <div style={{ padding: '16px', maxWidth: '1400px', margin: '0 auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}><h2 style={{ margin: 0, fontSize: '18px' }}>📦 Inventory</h2><div style={{ display: 'flex', gap: '8px' }}><select style={{ ...styles.input, width: '150px' }} value={vendorFilter} onChange={e => setVendorFilter(e.target.value)}><option value="all">All Vendors</option>{Object.values(vendors).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={() => setEditingProduct({})}>➕ Add Product</button></div></div>
-            <div style={{ ...styles.card, overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px', fontSize: '12px' }}><thead><tr style={{ background: '#0f6e56', color: 'white' }}><th style={{ padding: '10px', textAlign: 'left' }}>Product</th><th style={{ padding: '10px', textAlign: 'left' }}>Vendor</th><th style={{ padding: '10px', textAlign: 'right' }}>Price</th><th style={{ padding: '10px', textAlign: 'right' }}>Stock</th><th style={{ padding: '10px', textAlign: 'center' }}>Actions</th></tr></thead><tbody>{filtered.map(product => { const vendor = vendors[product.vendorId]; return (<tr key={product.id} style={{ borderBottom: '1px solid #eee' }}><td style={{ padding: '10px' }}><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><img src={product.image} alt="" style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'cover' }} /><div><div style={{ fontWeight: '500' }}>{product.name}</div><div style={{ fontSize: '10px', color: '#888' }}>{product.category}</div></div></div></td><td style={{ padding: '10px' }}><span style={{ ...styles.vendorBadge, background: vendor?.color }}>{vendor?.name}</span></td><td style={{ padding: '10px', textAlign: 'right', fontWeight: '600' }}>${product.price.toFixed(2)}/{product.unit}</td><td style={{ padding: '10px', textAlign: 'right', fontWeight: '600', color: product.stock < product.minStock ? '#dc2626' : '#0f6e56' }}>{product.stock}{product.stock < product.minStock && ' ⚠️'}</td><td style={{ padding: '10px', textAlign: 'center' }}><button style={{ ...styles.button, ...styles.secondaryBtn, padding: '4px 10px', fontSize: '10px' }} onClick={() => setEditingProduct(product)}>Edit</button></td></tr>); })}</tbody></table></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}><h2 style={{ margin: 0, fontSize: '18px' }}>📦 Inventory</h2><div style={{ display: 'flex', gap: '8px' }}><select style={{ ...styles.input, width: '150px' }} value={vendorFilter} onChange={e => setVendorFilter(e.target.value)}><option value="all">All Vendors</option>{Object.values(vendors).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select><button style={{ ...styles.button, background: '#6366f1', color: 'white' }} onClick={() => { const qty = prompt('Labels per product?', '1'); if (qty && parseInt(qty) > 0) { const productsWithQty = filtered.map(p => ({ ...p, printQty: parseInt(qty) })); window.BARCODE_PRINTER.printBatch(productsWithQty); } }}>🏷️ Print All</button><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={() => setEditingProduct({})}>➕ Add Product</button></div></div>
+            <div style={{ ...styles.card, overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px', fontSize: '12px' }}><thead><tr style={{ background: '#0f6e56', color: 'white' }}><th style={{ padding: '10px', textAlign: 'left' }}>Product</th><th style={{ padding: '10px', textAlign: 'left' }}>Vendor</th><th style={{ padding: '10px', textAlign: 'right' }}>Cost</th><th style={{ padding: '10px', textAlign: 'right' }}>Price</th><th style={{ padding: '10px', textAlign: 'right' }}>Margin</th><th style={{ padding: '10px', textAlign: 'right' }}>Stock</th><th style={{ padding: '10px', textAlign: 'center' }}>Actions</th></tr></thead><tbody>{filtered.map(product => { const vendor = vendors[product.vendorId]; const margin = product.cost && product.price ? ((product.price - product.cost) / product.price * 100).toFixed(0) : null; return (<tr key={product.id} style={{ borderBottom: '1px solid #eee' }}><td style={{ padding: '10px' }}><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><img src={product.image} alt="" style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'cover' }} /><div><div style={{ fontWeight: '500' }}>{product.name}</div><div style={{ fontSize: '10px', color: '#888' }}>{product.category} • {product.barcode}</div></div></div></td><td style={{ padding: '10px' }}><span style={{ ...styles.vendorBadge, background: vendor?.color }}>{vendor?.name}</span></td><td style={{ padding: '10px', textAlign: 'right', color: '#666' }}>{product.cost ? '$' + product.cost.toFixed(2) : '—'}</td><td style={{ padding: '10px', textAlign: 'right', fontWeight: '600' }}>${product.price.toFixed(2)}/{product.unit}</td><td style={{ padding: '10px', textAlign: 'right', color: margin && parseFloat(margin) > 30 ? '#0f6e56' : margin && parseFloat(margin) < 15 ? '#dc2626' : '#666' }}>{margin ? margin + '%' : '—'}</td><td style={{ padding: '10px', textAlign: 'right', fontWeight: '600', color: product.stock < product.minStock ? '#dc2626' : '#0f6e56' }}>{product.stock}{product.stock < product.minStock && ' ⚠️'}</td><td style={{ padding: '10px', textAlign: 'center' }}><button style={{ ...styles.button, ...styles.secondaryBtn, padding: '4px 10px', fontSize: '10px' }} onClick={() => setEditingProduct(product)}>Edit</button> <button style={{ ...styles.button, background: '#6366f1', color: 'white', padding: '4px 10px', fontSize: '10px' }} onClick={() => window.BARCODE_PRINTER.showPrintDialog(product)} title="Print barcode">🏷️</button></td></tr>); })}</tbody></table></div>
           </div>
         );
       };
