@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Farm POS v7.2</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Farm POS v7.3</title>
   <meta name="description" content="Cooperative Farm Store POS with multi-vendor consignment, role-based access, and peripheral device management">
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
@@ -16,7 +19,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
   
   <script>
-    console.log('[POS] === VERSION 7.2 LOADING ===');
+    console.log('[POS] === VERSION 7.3 LOADING ===');
     // ============================================
     // SUPABASE LAZY CONNECTOR
     // Does NOT connect on script load - call init() from React useEffect
@@ -144,6 +147,47 @@
           console.log('[POS] Fetched settings:', Object.keys(settings));
           return settings;
         } catch(e) { console.error('[POS] fetchSettings exception:', e); return null; }
+      },
+      
+      fetchTransactions: async function() {
+        if (!this.client) return [];
+        try {
+          // Fetch transactions with their items
+          var txR = await this.client.from('pos_transactions').select('*').order('created_at', { ascending: false }).limit(100);
+          if (txR.error) { console.error('[POS] fetchTransactions error:', txR.error); return []; }
+          
+          var transactions = [];
+          for (var i = 0; i < (txR.data || []).length; i++) {
+            var tx = txR.data[i];
+            // Fetch items for this transaction
+            var itemsR = await this.client.from('pos_transaction_items').select('*').eq('transaction_id', tx.id);
+            var items = (itemsR.data || []).map(function(item) {
+              return {
+                productId: item.product_id,
+                vendorId: item.vendor_id,
+                quantity: parseFloat(item.quantity),
+                price: parseFloat(item.unit_price),
+                total: parseFloat(item.line_total),
+                commissionRate: parseFloat(item.commission_rate),
+                commissionAmt: parseFloat(item.commission_amt)
+              };
+            });
+            transactions.push({
+              id: tx.id,
+              transactionNum: tx.transaction_num,
+              date: tx.created_at,
+              items: items,
+              subtotal: parseFloat(tx.subtotal),
+              tax: parseFloat(tx.tax_amount),
+              total: parseFloat(tx.total),
+              paymentMethod: tx.payment_method,
+              cashier: tx.cashier_id,
+              status: tx.status
+            });
+          }
+          console.log('[POS] Fetched transactions:', transactions.length);
+          return transactions;
+        } catch(e) { console.error('[POS] fetchTransactions exception:', e); return []; }
       },
       
       saveSettings: async function(s) {
@@ -646,6 +690,7 @@
       const [showSettlement, setShowSettlement] = useState(false);
       const [adminSection, setAdminSection] = useState('store');
       const [showKioskCart, setShowKioskCart] = useState(false);
+      const [transactions, setTransactions] = useState([]);
       
       // Admin settings state (moved to component level to fix hooks violation)
       const [localSettings, setLocalSettings] = useState({ ...SETTINGS });
@@ -769,6 +814,16 @@
               setSettings(loadedSettings);
               setLocalSettings(loadedSettings);
               console.log('[POS] Settings loaded');
+            }
+            
+            // Load transactions from Supabase
+            console.log('[POS] Fetching transactions...');
+            const sbTransactions = await sb.fetchTransactions();
+            if (sbTransactions && sbTransactions.length > 0) {
+              TRANSACTIONS.length = 0; // Clear array
+              sbTransactions.forEach(tx => TRANSACTIONS.push(tx));
+              setTransactions([...sbTransactions]);
+              console.log('[POS] Transactions loaded:', sbTransactions.length);
             }
             
             console.log('[POS] Initialization complete!');
@@ -1009,8 +1064,26 @@
             await window.SUPABASE_POS.saveTransaction(tx, items);
           }
           
-          // Update local
-          TRANSACTIONS.push({ id: `txn_${Date.now()}`, date: new Date().toISOString(), items: cart.map(item => ({ productId: item.id, name: item.name, vendorId: item.vendorId, quantity: item.quantity, price: item.price, total: item.total })), paymentMethod: method, total: cartTotal, cashier: user.name });
+          // Update local - create transaction object with proper structure
+          const newTx = { 
+            id: `txn_${Date.now()}`, 
+            date: new Date().toISOString(), 
+            items: cart.map(item => ({ 
+              productId: item.id, 
+              name: item.name, 
+              vendorId: item.vendorId, 
+              quantity: item.quantity, 
+              price: item.price, 
+              total: item.total,
+              commissionAmt: item.total * (item.commissionRate / 100)
+            })), 
+            paymentMethod: method, 
+            total: cartTotal, 
+            cashier: user.name 
+          };
+          TRANSACTIONS.push(newTx);
+          setTransactions(prev => [...prev, newTx]);
+          
           for (const item of cart) { for (const cat of Object.keys(PRODUCTS)) { const idx = PRODUCTS[cat].findIndex(p => p.id === item.id); if (idx >= 0) { PRODUCTS[cat][idx].stock = Math.max(0, PRODUCTS[cat][idx].stock - (item.isWeight ? 1 : item.quantity)); break; } } }
           setProducts({ ...PRODUCTS }); setCart([]); setProcessing(false); setShowPayment(false);
         };
@@ -1141,15 +1214,16 @@
 
       // SETTLEMENT MODAL
       const SettlementModal = () => {
-        // Calculate settlements from TRANSACTIONS
+        // Calculate settlements from transactions state (loaded from Supabase)
         const vendorTotals = {};
-        TRANSACTIONS.forEach(tx => {
-          tx.items.forEach(item => {
+        transactions.forEach(tx => {
+          (tx.items || []).forEach(item => {
             if (!vendorTotals[item.vendorId]) {
-              vendorTotals[item.vendorId] = { gross: 0, items: 0 };
+              vendorTotals[item.vendorId] = { gross: 0, items: 0, commission: 0 };
             }
-            vendorTotals[item.vendorId].gross += item.total;
+            vendorTotals[item.vendorId].gross += item.total || 0;
             vendorTotals[item.vendorId].items += 1;
+            vendorTotals[item.vendorId].commission += item.commissionAmt || 0;
           });
         });
         
@@ -1157,11 +1231,12 @@
           <div style={styles.modal} onClick={() => setShowSettlement(false)}>
             <div style={{ ...styles.modalContent, maxWidth: '700px' }} onClick={e => e.stopPropagation()}>
               <h2 style={{ margin: '0 0 16px', fontSize: '18px' }}>💰 Vendor Settlement Report</h2>
-              <div style={{ fontSize: '11px', color: '#666', marginBottom: '12px' }}>Based on {TRANSACTIONS.length} transaction(s)</div>
+              <div style={{ fontSize: '11px', color: '#666', marginBottom: '12px' }}>Based on {transactions.length} transaction(s) from Supabase</div>
               <div style={{ display: 'grid', gap: '10px' }}>
                 {Object.values(vendors).filter(v => v.type === 'consignment').map(vendor => {
-                  const totals = vendorTotals[vendor.id] || { gross: 0, items: 0 };
-                  const commission = totals.gross * (vendor.commissionRate / 100);
+                  const totals = vendorTotals[vendor.id] || { gross: 0, items: 0, commission: 0 };
+                  // If commission not stored in transaction, calculate it
+                  const commission = totals.commission > 0 ? totals.commission : totals.gross * (vendor.commissionRate / 100);
                   const netPayable = totals.gross - commission;
                   
                   return (
