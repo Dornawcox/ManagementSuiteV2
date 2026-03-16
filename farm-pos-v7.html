@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Valley View Farm Cooperative POS</title>
+  <meta name="description" content="Cooperative Farm Store POS with multi-vendor consignment, role-based access, and peripheral device management">
+  
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <script>
+    // ============================================
+    // SUPABASE LAZY CONNECTOR
+    // Does NOT connect on script load - call init() from React useEffect
+    // ============================================
+    window.SUPABASE_POS = {
+      client: null,
+      connected: false,
+      tablesExist: false,
+      error: null,
+      creds: null,
+      _initialized: false,
+      
+      init: function() {
+        if (this._initialized) return this.connected;
+        this._initialized = true;
+        
+        try {
+          this.creds = JSON.parse(localStorage.getItem('farmhack-supabase-v1')) || null;
+        } catch(e) { this.creds = null; }
+        
+        if (!this.creds || !this.creds.url || !this.creds.anonKey) {
+          this.error = 'No credentials. Configure in FarmHack Admin.';
+          return false;
+        }
+        
+        if (typeof supabase === 'undefined') {
+          this.error = 'Supabase library not loaded';
+          return false;
+        }
+        
+        try {
+          this.client = supabase.createClient(this.creds.url, this.creds.anonKey);
+          this.connected = true;
+          this.error = null;
+          console.log('[POS] Supabase connected');
+          return true;
+        } catch(e) {
+          this.error = e.message;
+          return false;
+        }
+      },
+      
+      checkTables: async function() {
+        if (!this.client && !this.init()) return false;
+        try {
+          var r = await this.client.from('pos_products').select('id').limit(1);
+          this.tablesExist = !r.error;
+          if (r.error) this.error = 'POS tables not found';
+          else this.error = null;
+          return this.tablesExist;
+        } catch(e) { this.tablesExist = false; this.error = e.message; return false; }
+      },
+      
+      fetchProducts: async function() {
+        if (!this.client) return null;
+        try {
+          var r = await this.client.from('pos_products').select('*').eq('is_active', true);
+          return r.error ? null : r.data;
+        } catch(e) { return null; }
+      },
+      
+      fetchVendors: async function() {
+        if (!this.client) return null;
+        try {
+          var r = await this.client.from('pos_vendors').select('*').eq('is_active', true);
+          return r.error ? null : r.data;
+        } catch(e) { return null; }
+      },
+      
+      saveTransaction: async function(tx, items) {
+        if (!this.client) return { success: false, error: 'Not connected' };
+        try {
+          var txR = await this.client.from('pos_transactions').insert(tx).select().single();
+          if (txR.error) throw txR.error;
+          var itemsData = items.map(function(i) { 
+            var copy = {}; for (var k in i) copy[k] = i[k];
+            copy.transaction_id = txR.data.id;
+            return copy;
+          });
+          var itemsR = await this.client.from('pos_transaction_items').insert(itemsData);
+          if (itemsR.error) throw itemsR.error;
+          return { success: true, data: txR.data };
+        } catch(e) { return { success: false, error: e.message }; }
+      },
+      
+      saveProduct: async function(p) {
+        if (!this.client) return { success: false };
+        try {
+          var d = {
+            id: p.id || 'p_' + Date.now(),
+            name: p.name, price: parseFloat(p.price), unit: p.unit,
+            unit_type: p.unitType, stock: parseInt(p.stock) || 0,
+            min_stock: parseInt(p.minStock) || 5, barcode: p.barcode || null,
+            image_url: p.image || null, vendor_id: p.vendorId,
+            category_id: p.category, is_active: true
+          };
+          var r = await this.client.from('pos_products').upsert(d).select().single();
+          return { success: !r.error, data: r.data };
+        } catch(e) { return { success: false, error: e.message }; }
+      },
+      
+      saveVendor: async function(v) {
+        if (!this.client) return { success: false };
+        try {
+          var d = {
+            id: v.id || v.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+            name: v.name, vendor_type: v.type,
+            commission_rate: parseFloat(v.commissionRate) || 0,
+            contact_email: v.contact || null,
+            payment_method: v.paymentMethod || 'check',
+            payment_terms: v.paymentTerms || 'net-15',
+            color: v.color || '#666666', is_active: v.active !== false
+          };
+          var r = await this.client.from('pos_vendors').upsert(d).select().single();
+          return { success: !r.error, data: r.data };
+        } catch(e) { return { success: false, error: e.message }; }
+      },
+      
+      deleteProduct: async function(id) {
+        if (!this.client) return false;
+        try {
+          var r = await this.client.from('pos_products').update({ is_active: false }).eq('id', id);
+          return !r.error;
+        } catch(e) { return false; }
+      }
+    };
+  </script>
+  
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif; background: linear-gradient(145deg, #f8f7f4 0%, #e8e5dc 100%); min-height: 100vh; color: #2c2c2a; }
+    #root { min-height: 100vh; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+    .loading { display: flex; align-items: center; justify-content: center; height: 100vh; font-size: 18px; color: #666; }
+    .db-status { position: fixed; top: 8px; right: 140px; font-size: 11px; padding: 4px 10px; border-radius: 12px; z-index: 100; cursor: help; }
+    .db-status.connected { background: #dcfce7; color: #166534; }
+    .db-status.partial { background: #fef3c7; color: #92400e; }
+    .db-status.demo { background: #fee2e2; color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <div id="root"><div class="loading">Loading Cooperative POS...</div></div>
+  
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect, useCallback, useMemo, createContext, useContext } = React;
+
+    // ============================================
+    // DATA STORES
+    // ============================================
+    
+    let USERS = [
+      { id: 'u1', username: 'admin', pin: '1234', name: 'Admin User', email: 'admin@valleyviewfarm.com', role: 'admin', permissions: ['all'], active: true, createdAt: '2026-01-01' },
+      { id: 'u2', username: 'manager', pin: '5678', name: 'Sarah Johnson', email: 'sarah@valleyviewfarm.com', role: 'manager', permissions: ['pos', 'kiosk', 'inventory', 'vendors', 'reports', 'settings'], active: true, createdAt: '2026-01-15' },
+      { id: 'u3', username: 'cashier', pin: '0000', name: 'Mike Chen', email: 'mike@valleyviewfarm.com', role: 'cashier', permissions: ['pos'], active: true, createdAt: '2026-02-01' },
+      { id: 'u4', username: 'cashier2', pin: '1111', name: 'Emily Davis', email: 'emily@valleyviewfarm.com', role: 'cashier', permissions: ['pos'], active: true, createdAt: '2026-02-15' },
+      { id: 'u5', username: 'kiosk', pin: '9999', name: 'Self-Service Kiosk', email: '', role: 'kiosk', permissions: ['kiosk'], active: true, createdAt: '2026-01-01' },
+    ];
+
+    let VENDORS = {
+      'farm-store': { id: 'farm-store', name: 'Valley View Farm', type: 'owner', commissionRate: 0, contact: 'admin@valleyviewfarm.com', paymentMethod: 'internal', paymentTerms: 'internal', color: '#0f6e56', active: true },
+      'sunny-acres': { id: 'sunny-acres', name: 'Sunny Acres Farm', type: 'consignment', commissionRate: 15, contact: 'jen@sunnyacres.farm', paymentMethod: 'check', paymentTerms: 'net-15', color: '#D85A30', active: true },
+      'hilltop-dairy': { id: 'hilltop-dairy', name: 'Hilltop Dairy', type: 'consignment', commissionRate: 12, contact: 'mike@hilltopdairy.com', paymentMethod: 'ach', paymentTerms: 'net-30', color: '#185FA5', active: true },
+      'beekeepers-coop': { id: 'beekeepers-coop', name: "Beekeepers' Cooperative", type: 'consignment', commissionRate: 10, contact: 'hive@beekeeperscoop.org', paymentMethod: 'check', paymentTerms: 'net-15', color: '#BA7517', active: true },
+      'heritage-meats': { id: 'heritage-meats', name: 'Heritage Meats', type: 'consignment', commissionRate: 18, contact: 'orders@heritagemeats.farm', paymentMethod: 'ach', paymentTerms: 'net-7', color: '#993556', active: true },
+    };
+
+    let PRODUCTS = {
+      vegetables: [
+        { id: 'v1', name: 'Heirloom Tomatoes', price: 4.50, unit: 'lb', unitType: 'weight', stock: 45, image: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=300&h=300&fit=crop', barcode: '0001001', vendorId: 'farm-store', category: 'vegetables', minStock: 10 },
+        { id: 'v2', name: 'Mixed Salad Greens', price: 6.00, unit: 'bag', unitType: 'each', stock: 28, image: 'https://images.unsplash.com/photo-1556801712-76c8eb07bbc9?w=300&h=300&fit=crop', barcode: '0001002', vendorId: 'farm-store', category: 'vegetables', minStock: 10 },
+        { id: 'v3', name: 'Rainbow Carrots', price: 3.50, unit: 'bunch', unitType: 'bunch', stock: 35, image: 'https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=300&h=300&fit=crop', barcode: '0001003', vendorId: 'sunny-acres', category: 'vegetables', minStock: 15 },
+        { id: 'v4', name: 'Garlic (Hardneck)', price: 1.50, unit: 'head', unitType: 'each', stock: 60, image: 'https://images.unsplash.com/photo-1540148426945-6cf22a6b2383?w=300&h=300&fit=crop', barcode: '0001004', vendorId: 'sunny-acres', category: 'vegetables', minStock: 20 },
+        { id: 'v5', name: 'Summer Squash', price: 2.75, unit: 'lb', unitType: 'weight', stock: 30, image: 'https://images.unsplash.com/photo-1563252722-6434563a985d?w=300&h=300&fit=crop', barcode: '0001005', vendorId: 'farm-store', category: 'vegetables', minStock: 10 },
+      ],
+      fruit: [
+        { id: 'f1', name: 'Honeycrisp Apples', price: 3.75, unit: 'lb', unitType: 'weight', stock: 80, image: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=300&h=300&fit=crop', barcode: '0002001', vendorId: 'sunny-acres', category: 'fruit', minStock: 20 },
+        { id: 'f2', name: 'Fresh Blueberries', price: 5.50, unit: 'pint', unitType: 'pint', stock: 25, image: 'https://images.unsplash.com/photo-1498557850523-fd3d118b962e?w=300&h=300&fit=crop', barcode: '0002003', vendorId: 'farm-store', category: 'fruit', minStock: 10 },
+      ],
+      eggs: [
+        { id: 'e1', name: 'Farm Fresh Eggs', price: 6.00, unit: 'dozen', unitType: 'dozen', stock: 45, image: 'https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=300&h=300&fit=crop', barcode: '0003001', vendorId: 'farm-store', category: 'eggs', minStock: 20 },
+        { id: 'e2', name: 'Duck Eggs', price: 8.00, unit: 'half-dozen', unitType: 'half-dozen', stock: 12, image: 'https://images.unsplash.com/photo-1569127959161-2b1297b2d9a6?w=300&h=300&fit=crop', barcode: '0003002', vendorId: 'sunny-acres', category: 'eggs', minStock: 5 },
+      ],
+      dairy: [
+        { id: 'd1', name: 'Raw Milk', price: 12.00, unit: 'gallon', unitType: 'gallon', stock: 15, image: 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=300&h=300&fit=crop', barcode: '0004001', vendorId: 'hilltop-dairy', category: 'dairy', minStock: 5 },
+        { id: 'd2', name: 'Aged Goat Cheese', price: 9.50, unit: '8oz', unitType: 'each', stock: 20, image: 'https://images.unsplash.com/photo-1559561853-08451507cbe7?w=300&h=300&fit=crop', barcode: '0004002', vendorId: 'hilltop-dairy', category: 'dairy', minStock: 8 },
+      ],
+      meat: [
+        { id: 'm1', name: 'Ground Beef (80/20)', price: 8.50, unit: 'lb', unitType: 'weight', stock: 30, image: 'https://images.unsplash.com/photo-1602470520998-f4a52199a3d6?w=300&h=300&fit=crop', barcode: '0005001', vendorId: 'heritage-meats', category: 'meat', minStock: 10 },
+        { id: 'm2', name: 'Whole Chicken', price: 5.75, unit: 'lb', unitType: 'weight', stock: 18, image: 'https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=300&h=300&fit=crop', barcode: '0005002', vendorId: 'farm-store', category: 'meat', minStock: 8 },
+      ],
+      preserves: [
+        { id: 'p1', name: 'Strawberry Jam', price: 7.50, unit: 'jar', unitType: 'each', stock: 35, image: 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=300&h=300&fit=crop', barcode: '0006001', vendorId: 'farm-store', category: 'preserves', minStock: 15 },
+        { id: 'p2', name: 'Wildflower Honey', price: 12.00, unit: 'lb', unitType: 'each', stock: 20, image: 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=300&h=300&fit=crop', barcode: '0006003', vendorId: 'beekeepers-coop', category: 'preserves', minStock: 10 },
+      ],
+    };
+
+    let TRANSACTIONS = [];
+
+    let DEVICES = [
+      { id: 'dev1', type: 'scanner', name: 'Barcode Scanner', model: 'Zebra DS2208', connection: 'usb', port: '/dev/ttyUSB0', status: 'connected', enabled: true, config: { mode: 'hid', beep: true } },
+      { id: 'dev2', type: 'printer', name: 'Receipt Printer', model: 'Epson TM-T20III', connection: 'usb', port: '/dev/usb/lp0', status: 'connected', enabled: true, config: { paperWidth: 80, autoCut: true } },
+      { id: 'dev3', type: 'scale', name: 'Produce Scale', model: 'Adam AZExtra 6', connection: 'serial', port: '/dev/ttyUSB1', status: 'connected', enabled: true, config: { unit: 'lb', precision: 2, baudRate: 9600 } },
+      { id: 'dev4', type: 'cashDrawer', name: 'Cash Drawer', model: 'APG Vasario', connection: 'printer', port: 'rj12', status: 'connected', enabled: true, config: {} },
+      { id: 'dev5', type: 'cardReader', name: 'Card Terminal', model: 'Stripe Reader M2', connection: 'bluetooth', port: 'CHB204-XXXX', status: 'connected', enabled: true, config: { provider: 'stripe' } },
+      { id: 'dev6', type: 'labelPrinter', name: 'Label Printer', model: 'Zebra ZD411', connection: 'usb', port: '/dev/usb/lp1', status: 'disconnected', enabled: false, config: {} },
+      { id: 'dev7', type: 'customerDisplay', name: 'Customer Display', model: '10" Touch Monitor', connection: 'hdmi', port: 'HDMI-2', status: 'connected', enabled: true, config: {} },
+    ];
+
+    // Hardware Presets Database
+    const HARDWARE_PRESETS = {
+      scanner: [
+        { model: 'Zebra DS2208', price: 150, connection: 'usb', features: 'Best overall, 1D/2D, durable', recommended: true },
+        { model: 'Honeywell Voyager 1400g', price: 180, connection: 'usb', features: '1D/2D, PDF417, ergonomic' },
+        { model: 'Socket Mobile S700', price: 230, connection: 'bluetooth', features: 'Wireless, iOS/Android, compact' },
+        { model: 'Tera HW0002', price: 35, connection: 'usb', features: 'Budget option, 1D/2D, wireless available' },
+      ],
+      printer: [
+        { model: 'Epson TM-T20III', price: 180, connection: 'usb', features: 'Reliable, 80mm, fast print', recommended: true },
+        { model: 'Star TSP143III', price: 200, connection: 'usb', features: 'iOS compatible, guillotine cutter' },
+        { model: 'Epson TM-M30II', price: 300, connection: 'network', features: 'Bluetooth + WiFi, tablet-friendly' },
+        { model: 'MUNBYN ITPP047', price: 80, connection: 'usb', features: 'Budget option, 80mm, auto-cutter' },
+      ],
+      scale: [
+        { model: 'Adam AZExtra 6', price: 180, connection: 'serial', features: '6kg/0.001kg, RS232, legal for trade', recommended: true },
+        { model: 'Mettler Toledo Ariva S', price: 400, connection: 'serial', features: 'Premium, touchscreen, fastest' },
+        { model: 'CAS SW-1 Series', price: 250, connection: 'serial', features: 'NTEP certified, pole display' },
+        { model: 'Brecknell 6710U', price: 150, connection: 'usb', features: 'USB direct, 15lb capacity' },
+      ],
+      cardReader: [
+        { model: 'Stripe Reader M2', price: 59, connection: 'bluetooth', features: 'Best API, tap/chip/swipe, self-service', recommended: true },
+        { model: 'Square Reader', price: 49, connection: 'bluetooth', features: 'Free POS app, easy setup' },
+        { model: 'SumUp Air', price: 39, connection: 'bluetooth', features: 'No monthly fees, EU popular' },
+        { model: 'PayPal Zettle', price: 79, connection: 'bluetooth', features: 'PayPal integration, invoicing' },
+      ],
+      cashDrawer: [
+        { model: 'APG Vasario VB320', price: 80, connection: 'printer', features: '16x16, 5 bill/5 coin, RJ12 trigger', recommended: true },
+        { model: 'Star CD3-1616', price: 95, connection: 'printer', features: 'Compact, printer-driven' },
+        { model: 'MMF Val-u Line', price: 65, connection: 'printer', features: 'Budget, durable steel' },
+      ],
+      labelPrinter: [
+        { model: 'Zebra ZD411', price: 280, connection: 'usb', features: '2" direct thermal, 203dpi', recommended: true },
+        { model: 'DYMO LabelWriter 450', price: 130, connection: 'usb', features: 'Easy setup, various label sizes' },
+        { model: 'Brother QL-820NWB', price: 250, connection: 'network', features: 'WiFi + Bluetooth, 110 labels/min' },
+      ],
+      customerDisplay: [
+        { model: '10" Touch Monitor', price: 150, connection: 'hdmi', features: 'Customer-facing, kiosk mode', recommended: true },
+        { model: 'Bematech 2x20 VFD', price: 120, connection: 'usb', features: 'Classic pole display, low power' },
+        { model: '15" Touch AIO', price: 350, connection: 'hdmi', features: 'Full self-checkout capable' },
+      ],
+    };
+
+    const PAYMENT_PROCESSORS = [
+      { id: 'stripe', name: 'Stripe', rate: '2.6% + $0.10', features: 'Best API, Terminal M2, developer-friendly', logo: '💳', recommended: true },
+      { id: 'square', name: 'Square', rate: '2.6% + $0.10', features: 'All-in-one, free POS app, easy setup', logo: '⬛' },
+      { id: 'sumup', name: 'SumUp', rate: '2.75% flat', features: 'No monthly fees, simple pricing', logo: '📱' },
+      { id: 'paypal', name: 'PayPal Zettle', rate: '2.29% + $0.09', features: 'PayPal ecosystem, invoicing', logo: '🅿️' },
+    ];
+
+    let SETTINGS = {
+      storeName: 'Valley View Farm Cooperative',
+      storeAddress: '123 Farm Road, Rural Valley, State 12345',
+      storePhone: '555-FARM',
+      storeEmail: 'info@valleyviewfarm.com',
+      receiptHeader: 'Thank you for supporting local farms!',
+      receiptFooter: 'Visit us at valleyviewfarm.com',
+      kioskEnabled: true,
+      kioskTimeout: 120,
+      paymentProcessor: 'stripe',
+      paymentApiKey: '',
+      paymentTestMode: true,
+      dbType: 'postgresql',
+      dbHost: 'localhost',
+      dbPort: 5432,
+      dbName: 'farm_pos',
+      dbUser: 'pos_user',
+      dbPassword: '',
+      dbConnected: true,
+      dbLastSync: '2026-03-15T14:30:00Z',
+      farmosEnabled: false,
+      farmosUrl: '',
+      farmosClientId: '',
+      farmosClientSecret: '',
+      farmosSyncInterval: 15,
+      farmosSyncHarvests: true,
+      farmosSyncSales: true,
+      farmosSyncInventory: true,
+      farmosStatus: 'disconnected',
+      farmosLastSync: null,
+    };
+
+    const CATEGORIES = [
+      { id: 'vegetables', name: 'Vegetables', icon: '🥬', color: '#0F6E56' },
+      { id: 'fruit', name: 'Fruit', icon: '🍎', color: '#D85A30' },
+      { id: 'eggs', name: 'Eggs', icon: '🥚', color: '#BA7517' },
+      { id: 'dairy', name: 'Dairy', icon: '🧀', color: '#185FA5' },
+      { id: 'meat', name: 'Meat', icon: '🥩', color: '#993556' },
+      { id: 'preserves', name: 'Preserves', icon: '🍯', color: '#534AB7' },
+    ];
+
+    const ROLES = [
+      { id: 'admin', name: 'Administrator', description: 'Full system access', permissions: ['all'] },
+      { id: 'manager', name: 'Manager', description: 'POS, inventory, vendors, reports, settings', permissions: ['pos', 'kiosk', 'inventory', 'vendors', 'reports', 'settings'] },
+      { id: 'cashier', name: 'Cashier', description: 'POS operations only', permissions: ['pos'] },
+      { id: 'kiosk', name: 'Kiosk', description: 'Self-service kiosk mode', permissions: ['kiosk'] },
+    ];
+
+    const UNIT_TYPES = [
+      { id: 'weight', name: 'By Weight', units: ['lb', 'oz', 'kg'] },
+      { id: 'each', name: 'Each/Unit', units: ['each', 'head', 'jar', '8oz'] },
+      { id: 'bunch', name: 'Bunch', units: ['bunch'] },
+      { id: 'dozen', name: 'Dozen', units: ['dozen', 'half-dozen'] },
+      { id: 'pint', name: 'Pint', units: ['pint'] },
+      { id: 'gallon', name: 'Gallon', units: ['gallon'] },
+      { id: 'bag', name: 'Bag', units: ['bag'] },
+    ];
+
+    // AUTH CONTEXT
+    const AuthContext = createContext(null);
+    const useAuth = () => useContext(AuthContext);
+
+    const AuthProvider = ({ children }) => {
+      const [user, setUser] = useState(null);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        const savedUser = localStorage.getItem('pos_user');
+        if (savedUser) setUser(JSON.parse(savedUser));
+        setLoading(false);
+      }, []);
+
+      const login = async (username, pin) => {
+        const foundUser = USERS.find(u => u.username === username && u.pin === pin && u.active);
+        if (foundUser) {
+          const userData = { ...foundUser, pin: undefined };
+          setUser(userData);
+          localStorage.setItem('pos_user', JSON.stringify(userData));
+          return { success: true, user: userData };
+        }
+        return { success: false, error: 'Invalid credentials' };
+      };
+
+      const logout = () => { setUser(null); localStorage.removeItem('pos_user'); };
+      const hasPermission = (permission) => { if (!user) return false; if (user.permissions?.includes('all')) return true; return user.permissions?.includes(permission); };
+
+      return <AuthContext.Provider value={{ user, login, logout, hasPermission, loading }}>{children}</AuthContext.Provider>;
+    };
+
+    // STYLES
+    const styles = {
+      app: { fontFamily: '"Source Sans 3", -apple-system, BlinkMacSystemFont, sans-serif', background: 'linear-gradient(145deg, #f8f7f4 0%, #e8e5dc 100%)', minHeight: '100vh', color: '#2c2c2a' },
+      header: { background: 'linear-gradient(90deg, #1a4d3e 0%, #0f6e56 50%, #1a8a6d 100%)', color: 'white', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', flexWrap: 'wrap', gap: '10px' },
+      logo: { fontSize: '16px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' },
+      tabs: { display: 'flex', gap: '4px', flexWrap: 'wrap' },
+      tab: { padding: '6px 12px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: '600', transition: 'all 0.2s', fontFamily: 'inherit' },
+      tabActive: { background: 'white', color: '#0f6e56' },
+      tabInactive: { background: 'rgba(255,255,255,0.15)', color: 'white' },
+      card: { background: 'white', borderRadius: '12px', padding: '16px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' },
+      input: { width: '100%', padding: '10px 12px', border: '2px solid #e0ddd5', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box', fontFamily: 'inherit' },
+      button: { padding: '10px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600', transition: 'all 0.2s', fontFamily: 'inherit' },
+      primaryBtn: { background: 'linear-gradient(135deg, #0f6e56 0%, #1a8a6d 100%)', color: 'white' },
+      secondaryBtn: { background: '#f0efeb', color: '#444' },
+      dangerBtn: { background: '#fef2f2', color: '#b91c1c' },
+      modal: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' },
+      modalContent: { background: 'white', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' },
+      vendorBadge: { padding: '2px 8px', borderRadius: '10px', fontSize: '9px', fontWeight: '600', color: 'white' },
+      toggle: { width: '44px', height: '24px', borderRadius: '12px', border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.2s' },
+      toggleKnob: { width: '18px', height: '18px', borderRadius: '9px', background: 'white', position: 'absolute', top: '3px', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' },
+    };
+
+    // LOGIN SCREEN
+    const LoginScreen = () => {
+      const { login } = useAuth();
+      const [username, setUsername] = useState('');
+      const [pin, setPin] = useState('');
+      const [error, setError] = useState('');
+      const [loading, setLoading] = useState(false);
+
+      const handleSubmit = async (e) => { e.preventDefault(); setLoading(true); setError(''); const result = await login(username, pin); if (!result.success) setError(result.error); setLoading(false); };
+      const quickLogin = async (u, p) => { setLoading(true); await login(u, p); setLoading(false); };
+
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #1a4d3e 0%, #0f6e56 50%, #1a8a6d 100%)', padding: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '20px', padding: '40px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+              <div style={{ fontSize: '48px', marginBottom: '10px' }}>🌱</div>
+              <h1 style={{ fontSize: '22px', color: '#0f6e56', margin: '0 0 5px' }}>{SETTINGS.storeName}</h1>
+              <p style={{ color: '#666', fontSize: '13px', margin: 0 }}>Point of Sale System</p>
+            </div>
+            <form onSubmit={handleSubmit}>
+              <div style={{ marginBottom: '14px' }}><label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', fontWeight: '600' }}>Username</label><input style={styles.input} type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="Enter username" /></div>
+              <div style={{ marginBottom: '18px' }}><label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', fontWeight: '600' }}>PIN</label><input style={styles.input} type="password" value={pin} onChange={e => setPin(e.target.value)} placeholder="Enter PIN" maxLength={4} /></div>
+              {error && <div style={{ background: '#fef2f2', color: '#b91c1c', padding: '10px', borderRadius: '8px', marginBottom: '14px', fontSize: '12px' }}>{error}</div>}
+              <button type="submit" style={{ ...styles.button, ...styles.primaryBtn, width: '100%', padding: '14px', fontSize: '15px' }} disabled={loading}>{loading ? 'Logging in...' : 'Login'}</button>
+            </form>
+            <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #eee' }}>
+              <p style={{ fontSize: '10px', color: '#888', marginBottom: '10px', textAlign: 'center' }}>Demo Quick Login:</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                {[['admin', '1234', '👤 Admin'], ['manager', '5678', '👔 Manager'], ['cashier', '0000', '💵 Cashier'], ['kiosk', '9999', '🖥️ Kiosk']].map(([u, p, label]) => (
+                  <button key={u} style={{ ...styles.button, ...styles.secondaryBtn, fontSize: '10px', padding: '8px' }} onClick={() => quickLogin(u, p)}>{label}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // MAIN APP
+    function MainApp() {
+      const { user, logout, hasPermission } = useAuth();
+      const [view, setView] = useState(() => user?.role === 'kiosk' ? 'kiosk' : 'pos');
+      const [products, setProducts] = useState(PRODUCTS);
+      const [vendors, setVendors] = useState(VENDORS);
+      const [devices, setDevices] = useState(DEVICES);
+      const [users, setUsers] = useState(USERS);
+      const [settings, setSettings] = useState(SETTINGS);
+      const [cart, setCart] = useState([]);
+      const [selectedCategory, setSelectedCategory] = useState('vegetables');
+      const [scaleProduct, setScaleProduct] = useState(null);
+      const [weight, setWeight] = useState(0);
+      const [stable, setStable] = useState(true);
+      const [language, setLanguage] = useState('en');
+      const [vendorFilter, setVendorFilter] = useState('all');
+      const [scannerInput, setScannerInput] = useState('');
+      const [editingProduct, setEditingProduct] = useState(null);
+      const [editingVendor, setEditingVendor] = useState(null);
+      const [editingUser, setEditingUser] = useState(null);
+      const [editingDevice, setEditingDevice] = useState(null);
+      const [showPayment, setShowPayment] = useState(false);
+      const [showSettlement, setShowSettlement] = useState(false);
+      const [adminSection, setAdminSection] = useState('store');
+      const [showKioskCart, setShowKioskCart] = useState(false);
+      
+      // Admin settings state (moved to component level to fix hooks violation)
+      const [localSettings, setLocalSettings] = useState({ ...SETTINGS });
+      const [adminSaving, setAdminSaving] = useState(false);
+      const [testingDb, setTestingDb] = useState(false);
+      const [testingFarmos, setTestingFarmos] = useState(false);
+      
+      // Database status
+      const [dbStatus, setDbStatus] = useState({ connected: false, tablesExist: false, error: null, loading: true });
+      
+      // Initialize Supabase on mount (after library is loaded)
+      useEffect(() => {
+        async function initDb() {
+          const sb = window.SUPABASE_POS;
+          sb.init(); // Safe to call - library is loaded by now
+          
+          if (sb.connected) {
+            const hasTable = await sb.checkTables();
+            setDbStatus({ connected: true, tablesExist: hasTable, error: sb.error, loading: false });
+            
+            if (hasTable) {
+              // Load products
+              const sbProducts = await sb.fetchProducts();
+              if (sbProducts && sbProducts.length > 0) {
+                const grouped = {};
+                sbProducts.forEach(p => {
+                  const cat = p.category_id || 'vegetables';
+                  if (!grouped[cat]) grouped[cat] = [];
+                  grouped[cat].push({
+                    id: p.id, name: p.name, price: parseFloat(p.price), unit: p.unit,
+                    unitType: p.unit_type, stock: p.stock, minStock: p.min_stock,
+                    barcode: p.barcode, image: p.image_url, vendorId: p.vendor_id, category: cat
+                  });
+                });
+                setProducts(grouped);
+                Object.assign(PRODUCTS, grouped);
+              }
+              
+              // Load vendors
+              const sbVendors = await sb.fetchVendors();
+              if (sbVendors && sbVendors.length > 0) {
+                const vendorMap = {};
+                sbVendors.forEach(v => {
+                  vendorMap[v.id] = {
+                    id: v.id, name: v.name, type: v.vendor_type,
+                    commissionRate: parseFloat(v.commission_rate), contact: v.contact_email,
+                    paymentMethod: v.payment_method, paymentTerms: v.payment_terms,
+                    color: v.color, active: v.is_active
+                  };
+                });
+                setVendors(vendorMap);
+                Object.assign(VENDORS, vendorMap);
+              }
+            }
+          } else {
+            setDbStatus({ connected: false, tablesExist: false, error: sb.error, loading: false });
+          }
+        }
+        initDb();
+      }, []);
+      
+      // Sync localSettings when settings change
+      useEffect(() => { setLocalSettings({ ...settings }); }, [settings]);
+
+      const simulateWeigh = useCallback(() => {
+        setStable(false);
+        const targetWeight = (Math.random() * 3 + 0.5).toFixed(2);
+        let current = 0;
+        const interval = setInterval(() => {
+          current += parseFloat(targetWeight) / 10;
+          if (current >= parseFloat(targetWeight)) { setWeight(parseFloat(targetWeight)); setStable(true); clearInterval(interval); }
+          else { setWeight(parseFloat(current.toFixed(2))); }
+        }, 100);
+      }, []);
+
+      const findProductByBarcode = (barcode) => { for (const category of Object.keys(products)) { const product = products[category].find(p => p.barcode === barcode); if (product) return { product, category }; } return null; };
+
+      const addToCart = (product, quantity, weightValue = null) => {
+        const isWeight = product.unitType === 'weight';
+        const actualQuantity = weightValue || quantity;
+        const lineTotal = isWeight ? product.price * actualQuantity : product.price * quantity;
+        const vendor = vendors[product.vendorId];
+        if (!isWeight) {
+          const existingIndex = cart.findIndex(item => item.id === product.id);
+          if (existingIndex >= 0) { const newCart = [...cart]; newCart[existingIndex].quantity += quantity; newCart[existingIndex].total = newCart[existingIndex].quantity * product.price; setCart(newCart); return; }
+        }
+        setCart([...cart, { ...product, cartId: `cart_${Date.now()}_${Math.random()}`, quantity: isWeight ? actualQuantity : quantity, total: lineTotal, isWeight, vendorName: vendor?.name || 'Unknown', vendorColor: vendor?.color || '#666', commissionRate: vendor?.commissionRate || 0 }]);
+      };
+
+      const updateCartItem = (cartId, updates) => { setCart(cart.map(item => { if (item.cartId === cartId) { const newItem = { ...item, ...updates }; newItem.total = newItem.price * newItem.quantity; return newItem; } return item; })); };
+      const removeCartItem = (cartId) => setCart(cart.filter(item => item.cartId !== cartId));
+      const cartTotal = cart.reduce((sum, item) => sum + item.total, 0);
+      const cartByVendor = useMemo(() => { const grouped = {}; cart.forEach(item => { if (!grouped[item.vendorId]) grouped[item.vendorId] = { vendor: vendors[item.vendorId], items: [], subtotal: 0 }; grouped[item.vendorId].items.push(item); grouped[item.vendorId].subtotal += item.total; }); return grouped; }, [cart, vendors]);
+
+      // FIXED: Views available based on permissions - kiosk available to POS users, admin available to settings users
+      const availableViews = useMemo(() => {
+        const views = [];
+        if (hasPermission('pos') || hasPermission('all')) views.push({ id: 'pos', label: '👤 POS' });
+        if (hasPermission('kiosk') || hasPermission('pos') || hasPermission('all')) views.push({ id: 'kiosk', label: '🖥️ Kiosk' });
+        if (hasPermission('vendors') || hasPermission('all')) views.push({ id: 'vendors', label: '🤝 Vendors' });
+        if (hasPermission('inventory') || hasPermission('all')) views.push({ id: 'inventory', label: '📦 Inventory' });
+        if (hasPermission('settings') || hasPermission('all')) views.push({ id: 'admin', label: '⚙️ Admin' });
+        return views;
+      }, [hasPermission]);
+
+      // USER EDIT MODAL
+      const UserEditModal = ({ userToEdit, onClose }) => {
+        const [form, setForm] = useState(userToEdit || { username: '', name: '', email: '', pin: '', role: 'cashier', active: true });
+        const [saving, setSaving] = useState(false);
+        const [showPin, setShowPin] = useState(false);
+        const handleSave = () => { setSaving(true); const rolePerms = ROLES.find(r => r.id === form.role)?.permissions || []; if (userToEdit?.id) { const idx = USERS.findIndex(u => u.id === userToEdit.id); if (idx >= 0) USERS[idx] = { ...USERS[idx], ...form, permissions: rolePerms }; } else { USERS.push({ ...form, id: `u${Date.now()}`, createdAt: new Date().toISOString().split('T')[0], permissions: rolePerms }); } setUsers([...USERS]); setSaving(false); onClose(); };
+        const handleDelete = () => { if (confirm('Delete this user?')) { USERS = USERS.filter(u => u.id !== userToEdit.id); setUsers([...USERS]); onClose(); } };
+        return (
+          <div style={styles.modal} onClick={onClose}><div style={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 20px', fontSize: '18px' }}>{userToEdit?.id ? '✏️ Edit User' : '➕ New User'}</h2>
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666' }}>Username *</label><input style={styles.input} value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} /></div><div><label style={{ fontSize: '11px', color: '#666' }}>Full Name *</label><input style={styles.input} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div></div>
+              <div><label style={{ fontSize: '11px', color: '#666' }}>Email</label><input style={styles.input} type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666' }}>PIN (4 digits) *</label><div style={{ display: 'flex', gap: '6px' }}><input style={{ ...styles.input, flex: 1 }} type={showPin ? 'text' : 'password'} maxLength={4} value={form.pin} onChange={e => setForm({ ...form, pin: e.target.value })} /><button style={{ ...styles.button, ...styles.secondaryBtn, padding: '8px' }} onClick={() => setShowPin(!showPin)}>{showPin ? '🙈' : '👁️'}</button></div></div><div><label style={{ fontSize: '11px', color: '#666' }}>Role *</label><select style={styles.input} value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>{ROLES.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></div></div>
+              <div style={{ background: '#f8f7f4', padding: '12px', borderRadius: '8px' }}><div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '6px' }}>Role Permissions</div><div style={{ fontSize: '11px', color: '#666' }}>{ROLES.find(r => r.id === form.role)?.description}</div></div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}><input type="checkbox" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} /> Active</label>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>{userToEdit?.id && userToEdit.id !== user.id && <button style={{ ...styles.button, ...styles.dangerBtn }} onClick={handleDelete}>Delete</button>}<button style={{ ...styles.button, ...styles.secondaryBtn, flex: 1 }} onClick={onClose}>Cancel</button><button style={{ ...styles.button, ...styles.primaryBtn, flex: 2 }} onClick={handleSave} disabled={saving || !form.username || !form.name || !form.pin}>Save</button></div>
+            </div>
+          </div></div>
+        );
+      };
+
+      // DEVICE EDIT MODAL WITH PRESETS
+      const DeviceEditModal = ({ deviceToEdit, onClose }) => {
+        const [form, setForm] = useState(deviceToEdit || { type: 'scanner', name: '', model: '', connection: 'usb', port: '', enabled: true, config: {} });
+        const [testing, setTesting] = useState(false);
+        const [testResult, setTestResult] = useState(null);
+        const [showPresets, setShowPresets] = useState(false);
+        const deviceTypes = [{ id: 'scanner', name: 'Barcode Scanner', icon: '📷' }, { id: 'printer', name: 'Receipt Printer', icon: '🖨️' }, { id: 'scale', name: 'Scale', icon: '⚖️' }, { id: 'cashDrawer', name: 'Cash Drawer', icon: '💵' }, { id: 'cardReader', name: 'Card Reader', icon: '💳' }, { id: 'labelPrinter', name: 'Label Printer', icon: '🏷️' }, { id: 'customerDisplay', name: 'Customer Display', icon: '🖥️' }];
+        const presets = HARDWARE_PRESETS[form.type] || [];
+        const applyPreset = (preset) => { setForm({ ...form, model: preset.model, connection: preset.connection, name: form.name || deviceTypes.find(d => d.id === form.type)?.name || '' }); setShowPresets(false); };
+        const handleSave = () => { if (deviceToEdit?.id) { const idx = DEVICES.findIndex(d => d.id === deviceToEdit.id); if (idx >= 0) DEVICES[idx] = { ...DEVICES[idx], ...form }; } else { DEVICES.push({ ...form, id: `dev${Date.now()}`, status: 'disconnected' }); } setDevices([...DEVICES]); onClose(); };
+        const handleTest = async () => { setTesting(true); setTestResult(null); await new Promise(r => setTimeout(r, 1000)); setTestResult(Math.random() > 0.3 ? 'success' : 'failed'); setTesting(false); };
+        const handleDelete = () => { if (confirm('Delete this device?')) { DEVICES = DEVICES.filter(d => d.id !== deviceToEdit.id); setDevices([...DEVICES]); onClose(); } };
+        return (
+          <div style={styles.modal} onClick={onClose}><div style={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 20px', fontSize: '18px' }}>{deviceToEdit?.id ? '✏️ Edit Device' : '➕ Add Device'}</h2>
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <div><label style={{ fontSize: '11px', color: '#666' }}>Device Type</label><select style={styles.input} value={form.type} onChange={e => setForm({ ...form, type: e.target.value, model: '', connection: 'usb' })}>{deviceTypes.map(t => <option key={t.id} value={t.id}>{t.icon} {t.name}</option>)}</select></div>
+              {presets.length > 0 && (
+                <div style={{ background: '#f0fdf4', padding: '12px', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showPresets ? '10px' : 0 }}><span style={{ fontSize: '12px', fontWeight: '600', color: '#0f6e56' }}>📦 Recommended Hardware</span><button style={{ ...styles.button, ...styles.secondaryBtn, padding: '4px 10px', fontSize: '10px' }} onClick={() => setShowPresets(!showPresets)}>{showPresets ? 'Hide' : 'Show Options'}</button></div>
+                  {showPresets && <div style={{ display: 'grid', gap: '6px' }}>{presets.map(preset => (<div key={preset.model} onClick={() => applyPreset(preset)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: 'white', borderRadius: '6px', cursor: 'pointer', border: form.model === preset.model ? '2px solid #0f6e56' : '2px solid transparent' }}><div><div style={{ fontWeight: '600', fontSize: '12px' }}>{preset.model} {preset.recommended && <span style={{ color: '#0f6e56' }}>★</span>}</div><div style={{ fontSize: '10px', color: '#666' }}>{preset.features}</div></div><div style={{ textAlign: 'right' }}><div style={{ fontWeight: '700', color: '#0f6e56' }}>${preset.price}</div><div style={{ fontSize: '9px', color: '#888' }}>{preset.connection.toUpperCase()}</div></div></div>))}</div>}
+                </div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666' }}>Device Name</label><input style={styles.input} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g., Main Scanner" /></div><div><label style={{ fontSize: '11px', color: '#666' }}>Model</label><input style={styles.input} value={form.model} onChange={e => setForm({ ...form, model: e.target.value })} placeholder="e.g., Zebra DS2208" /></div></div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666' }}>Connection</label><select style={styles.input} value={form.connection} onChange={e => setForm({ ...form, connection: e.target.value })}>{['usb', 'serial', 'network', 'bluetooth', 'hdmi', 'printer'].map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}</select></div><div><label style={{ fontSize: '11px', color: '#666' }}>Port / Address</label><input style={styles.input} value={form.port} onChange={e => setForm({ ...form, port: e.target.value })} placeholder="/dev/ttyUSB0" /></div></div>
+              {form.type === 'scale' && <div style={{ background: '#f8f7f4', padding: '12px', borderRadius: '8px' }}><div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px' }}>Scale Settings</div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}><div><label style={{ fontSize: '10px', color: '#666' }}>Unit</label><select style={{ ...styles.input, padding: '8px' }} value={form.config?.unit || 'lb'} onChange={e => setForm({ ...form, config: { ...form.config, unit: e.target.value } })}><option value="lb">Pounds</option><option value="kg">Kilograms</option></select></div><div><label style={{ fontSize: '10px', color: '#666' }}>Precision</label><select style={{ ...styles.input, padding: '8px' }} value={form.config?.precision || 2} onChange={e => setForm({ ...form, config: { ...form.config, precision: parseInt(e.target.value) } })}><option value={1}>0.1</option><option value={2}>0.01</option></select></div><div><label style={{ fontSize: '10px', color: '#666' }}>Baud Rate</label><select style={{ ...styles.input, padding: '8px' }} value={form.config?.baudRate || 9600} onChange={e => setForm({ ...form, config: { ...form.config, baudRate: parseInt(e.target.value) } })}><option value={9600}>9600</option><option value={19200}>19200</option></select></div></div></div>}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}><input type="checkbox" checked={form.enabled} onChange={e => setForm({ ...form, enabled: e.target.checked })} /> Enabled</label><button style={{ ...styles.button, ...styles.secondaryBtn }} onClick={handleTest} disabled={testing}>{testing ? '⏳ Testing...' : '🔌 Test'}</button></div>
+              {testResult && <div style={{ padding: '10px', borderRadius: '8px', background: testResult === 'success' ? '#dcfce7' : '#fef2f2', color: testResult === 'success' ? '#166534' : '#b91c1c', fontSize: '12px' }}>{testResult === 'success' ? '✓ Connected' : '✗ Failed'}</div>}
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>{deviceToEdit?.id && <button style={{ ...styles.button, ...styles.dangerBtn }} onClick={handleDelete}>Delete</button>}<button style={{ ...styles.button, ...styles.secondaryBtn, flex: 1 }} onClick={onClose}>Cancel</button><button style={{ ...styles.button, ...styles.primaryBtn, flex: 2 }} onClick={handleSave} disabled={!form.name}>Save</button></div>
+            </div>
+          </div></div>
+        );
+      };
+
+      // PRODUCT EDIT MODAL
+      const ProductEditModal = ({ product, onClose }) => {
+        const [form, setForm] = useState(product || { name: '', price: '', category: 'vegetables', unitType: 'each', unit: 'each', stock: '', barcode: `00${Date.now().toString().slice(-5)}`, vendorId: 'farm-store', minStock: 10 });
+        const [saving, setSaving] = useState(false);
+        const selectedUnitType = UNIT_TYPES.find(u => u.id === form.unitType);
+        const handleSave = async () => {
+          setSaving(true);
+          const data = { ...form, id: product?.id || `${form.category[0]}${Date.now()}`, price: parseFloat(form.price), stock: parseInt(form.stock) || 0, image: form.image || 'https://images.unsplash.com/photo-1518843875459-f738682238a6?w=300&h=300&fit=crop' };
+          
+          // Save to Supabase if connected
+          if (dbStatus.connected && dbStatus.tablesExist) {
+            await window.SUPABASE_POS.saveProduct(data);
+          }
+          
+          // Update local
+          if (product?.id) { for (const cat of Object.keys(PRODUCTS)) { const idx = PRODUCTS[cat].findIndex(p => p.id === product.id); if (idx >= 0) { PRODUCTS[cat][idx] = { ...PRODUCTS[cat][idx], ...data }; break; } } }
+          else { if (!PRODUCTS[data.category]) PRODUCTS[data.category] = []; PRODUCTS[data.category].push(data); }
+          setProducts({ ...PRODUCTS }); setSaving(false); onClose();
+        };
+        const handleDelete = async () => {
+          if (confirm('Delete this product?')) {
+            if (dbStatus.connected && dbStatus.tablesExist) await window.SUPABASE_POS.deleteProduct(product.id);
+            for (const cat of Object.keys(PRODUCTS)) PRODUCTS[cat] = PRODUCTS[cat].filter(p => p.id !== product.id);
+            setProducts({ ...PRODUCTS }); onClose();
+          }
+        };
+        return (
+          <div style={styles.modal} onClick={onClose}><div style={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 20px', fontSize: '18px' }}>{product?.id ? '✏️ Edit Product' : '➕ New Product'}</h2>
+            {dbStatus.connected && dbStatus.tablesExist && <div style={{ background: '#dcfce7', padding: '8px 12px', borderRadius: '8px', fontSize: '11px', color: '#166534', marginBottom: '12px' }}>✓ Will sync to Supabase</div>}
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <div style={{ background: '#f0fdf4', padding: '12px', borderRadius: '8px' }}><label style={{ fontSize: '12px', fontWeight: '600', color: '#0f6e56' }}>Vendor</label><select style={{ ...styles.input, marginTop: '6px' }} value={form.vendorId} onChange={e => setForm({ ...form, vendorId: e.target.value })}>{Object.values(vendors).map(v => <option key={v.id} value={v.id}>{v.name} ({v.commissionRate}%)</option>)}</select></div>
+              <input style={styles.input} placeholder="Product name *" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666' }}>Category</label><select style={styles.input} value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>{CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}</select></div><div><label style={{ fontSize: '11px', color: '#666' }}>Price *</label><input style={styles.input} type="number" step="0.01" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} /></div><div><label style={{ fontSize: '11px', color: '#666' }}>Stock</label><input style={styles.input} type="number" value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} /></div></div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666' }}>Unit Type</label><select style={styles.input} value={form.unitType} onChange={e => { const ut = UNIT_TYPES.find(u => u.id === e.target.value); setForm({ ...form, unitType: e.target.value, unit: ut.units[0] }); }}>{UNIT_TYPES.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select></div><div><label style={{ fontSize: '11px', color: '#666' }}>Unit</label><select style={styles.input} value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })}>{selectedUnitType?.units.map(u => <option key={u} value={u}>{u}</option>)}</select></div></div>
+              <input style={styles.input} placeholder="Barcode" value={form.barcode} onChange={e => setForm({ ...form, barcode: e.target.value })} />
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>{product?.id && <button style={{ ...styles.button, ...styles.dangerBtn }} onClick={handleDelete}>Delete</button>}<button style={{ ...styles.button, ...styles.secondaryBtn, flex: 1 }} onClick={onClose}>Cancel</button><button style={{ ...styles.button, ...styles.primaryBtn, flex: 2 }} onClick={handleSave} disabled={!form.name || !form.price || saving}>{saving ? 'Saving...' : 'Save'}</button></div>
+            </div>
+          </div></div>
+        );
+      };
+
+      // VENDOR EDIT MODAL
+      const VendorEditModal = ({ vendor, onClose }) => {
+        const [form, setForm] = useState(vendor || { name: '', type: 'consignment', commissionRate: 15, contact: '', paymentMethod: 'check', paymentTerms: 'net-15', color: '#666666', active: true });
+        const [saving, setSaving] = useState(false);
+        const handleSave = async () => {
+          setSaving(true);
+          const id = vendor?.id || form.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+          const data = { ...form, id };
+          
+          if (dbStatus.connected && dbStatus.tablesExist) {
+            await window.SUPABASE_POS.saveVendor(data);
+          }
+          
+          VENDORS[id] = data;
+          setVendors({ ...VENDORS }); setSaving(false); onClose();
+        };
+        return (
+          <div style={styles.modal} onClick={onClose}><div style={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 20px', fontSize: '18px' }}>{vendor?.id ? '✏️ Edit Vendor' : '➕ New Vendor'}</h2>
+            {dbStatus.connected && dbStatus.tablesExist && <div style={{ background: '#dcfce7', padding: '8px 12px', borderRadius: '8px', fontSize: '11px', color: '#166534', marginBottom: '12px' }}>✓ Will sync to Supabase</div>}
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <input style={styles.input} placeholder="Vendor name *" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666' }}>Type</label><select style={styles.input} value={form.type} onChange={e => setForm({ ...form, type: e.target.value, commissionRate: e.target.value === 'owner' ? 0 : form.commissionRate })}><option value="owner">Farm Store</option><option value="consignment">Consignment</option></select></div><div><label style={{ fontSize: '11px', color: '#666' }}>Commission %</label><input style={styles.input} type="number" value={form.commissionRate} onChange={e => setForm({ ...form, commissionRate: parseFloat(e.target.value) || 0 })} disabled={form.type === 'owner'} /></div></div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666' }}>Payment</label><select style={styles.input} value={form.paymentMethod} onChange={e => setForm({ ...form, paymentMethod: e.target.value })}><option value="check">Check</option><option value="ach">ACH</option></select></div><div><label style={{ fontSize: '11px', color: '#666' }}>Terms</label><select style={styles.input} value={form.paymentTerms} onChange={e => setForm({ ...form, paymentTerms: e.target.value })}><option value="net-7">Net 7</option><option value="net-15">Net 15</option><option value="net-30">Net 30</option></select></div></div>
+              <input style={styles.input} placeholder="Contact email" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><label style={{ fontSize: '12px' }}>Color:</label><input type="color" value={form.color} onChange={e => setForm({ ...form, color: e.target.value })} style={{ width: '50px', height: '32px', border: 'none' }} /><label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}><input type="checkbox" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} /> Active</label></div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}><button style={{ ...styles.button, ...styles.secondaryBtn, flex: 1 }} onClick={onClose}>Cancel</button><button style={{ ...styles.button, ...styles.primaryBtn, flex: 2 }} onClick={handleSave} disabled={!form.name || saving}>{saving ? 'Saving...' : 'Save'}</button></div>
+            </div>
+          </div></div>
+        );
+      };
+
+      // PAYMENT MODAL
+      const PaymentModal = () => {
+        const [processing, setProcessing] = useState(false);
+        const completeSale = async (method) => {
+          setProcessing(true);
+          
+          // Save to Supabase if connected
+          if (dbStatus.connected && dbStatus.tablesExist) {
+            const tx = {
+              transaction_num: `TX${Date.now()}`,
+              subtotal: cartTotal, tax_amount: 0, total: cartTotal,
+              payment_method: method, status: 'completed',
+              cashier_id: user.id, is_kiosk: view === 'kiosk'
+            };
+            const items = cart.map(item => ({
+              product_id: item.id, vendor_id: item.vendorId,
+              quantity: item.quantity, unit_price: item.price,
+              line_total: item.total, commission_rate: item.commissionRate,
+              commission_amt: item.total * (item.commissionRate / 100),
+              is_weight: item.isWeight
+            }));
+            await window.SUPABASE_POS.saveTransaction(tx, items);
+          }
+          
+          // Update local
+          TRANSACTIONS.push({ id: `txn_${Date.now()}`, date: new Date().toISOString(), items: cart.map(item => ({ productId: item.id, name: item.name, vendorId: item.vendorId, quantity: item.quantity, price: item.price, total: item.total })), paymentMethod: method, total: cartTotal, cashier: user.name });
+          for (const item of cart) { for (const cat of Object.keys(PRODUCTS)) { const idx = PRODUCTS[cat].findIndex(p => p.id === item.id); if (idx >= 0) { PRODUCTS[cat][idx].stock = Math.max(0, PRODUCTS[cat][idx].stock - (item.isWeight ? 1 : item.quantity)); break; } } }
+          setProducts({ ...PRODUCTS }); setCart([]); setProcessing(false); setShowPayment(false);
+        };
+        return (
+          <div style={styles.modal} onClick={() => !processing && setShowPayment(false)}><div style={{ ...styles.modalContent, maxWidth: '450px' }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 16px', fontSize: '18px' }}>💳 Complete Sale</h2>
+            {dbStatus.connected && dbStatus.tablesExist && <div style={{ background: '#dcfce7', padding: '8px 12px', borderRadius: '8px', fontSize: '11px', color: '#166534', marginBottom: '12px' }}>✓ Transaction will sync to Supabase</div>}
+            <div style={{ marginBottom: '16px' }}>{Object.entries(cartByVendor).map(([vendorId, data]) => (<div key={vendorId} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', marginBottom: '4px', background: '#f8f7f4', borderRadius: '6px', borderLeft: `3px solid ${data.vendor?.color || '#666'}` }}><span style={{ fontSize: '12px' }}>{data.vendor?.name}</span><span style={{ fontWeight: '600', fontSize: '13px' }}>${data.subtotal.toFixed(2)}</span></div>))}</div>
+            <div style={{ fontSize: '28px', fontWeight: '700', color: '#0f6e56', textAlign: 'center', marginBottom: '20px', padding: '16px', background: '#f0fdf4', borderRadius: '10px' }}>${cartTotal.toFixed(2)}</div>
+            <div style={{ display: 'grid', gap: '8px', marginBottom: '16px' }}><button style={{ ...styles.button, ...styles.primaryBtn, padding: '14px' }} onClick={() => completeSale('card')} disabled={processing}>{processing ? 'Processing...' : '💳 Card'}</button><button style={{ ...styles.button, ...styles.secondaryBtn, padding: '14px' }} onClick={() => completeSale('cash')} disabled={processing}>💵 Cash</button></div>
+            <button style={{ ...styles.button, ...styles.dangerBtn, width: '100%' }} onClick={() => setShowPayment(false)} disabled={processing}>Cancel</button>
+          </div></div>
+        );
+      };
+
+      // SCALE PANEL
+      const ScalePanel = ({ product, onAdd, onCancel }) => (
+        <div style={{ background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)', border: '2px solid #d97706', borderRadius: '12px', padding: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}><img src={product.image} alt="" style={{ width: '50px', height: '50px', borderRadius: '8px', objectFit: 'cover' }} /><div><div style={{ fontWeight: '600', color: '#92400e', fontSize: '14px' }}>{product.name}</div><div style={{ fontSize: '12px', color: '#b45309' }}>${product.price.toFixed(2)}/lb</div></div></div>
+          <div style={{ fontSize: '36px', fontWeight: '700', textAlign: 'center', color: '#78350f', fontFamily: 'monospace' }}>{weight.toFixed(2)} lb</div>
+          <div style={{ textAlign: 'center', fontSize: '11px', color: '#92400e', marginBottom: '12px' }}>{stable ? '✓ Stable' : '○ Measuring...'}</div>
+          <div style={{ display: 'flex', gap: '8px' }}><button style={{ ...styles.button, ...styles.secondaryBtn, flex: 1, fontSize: '12px' }} onClick={onCancel}>Cancel</button><button style={{ ...styles.button, ...styles.secondaryBtn, flex: 1, fontSize: '12px' }} onClick={simulateWeigh}>Re-weigh</button><button style={{ ...styles.button, ...styles.primaryBtn, flex: 2, fontSize: '12px' }} onClick={() => { if (stable && weight > 0) { onAdd(product, 1, weight); onCancel(); } }} disabled={!stable || weight === 0}>Add ${(product.price * weight).toFixed(2)}</button></div>
+        </div>
+      );
+
+      // CART PANEL
+      const CartPanel = () => (
+        <div style={{ ...styles.card, flex: 1 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}><span style={{ fontWeight: '600', fontSize: '14px' }}>🛒 Cart ({cart.length})</span>{cart.length > 0 && <button style={{ ...styles.button, ...styles.secondaryBtn, padding: '4px 8px', fontSize: '10px' }} onClick={() => setCart([])}>Clear</button>}</div>
+          <div style={{ maxHeight: '260px', overflowY: 'auto', marginBottom: '10px' }}>{cart.length === 0 ? <div style={{ textAlign: 'center', color: '#888', padding: '20px', fontSize: '12px' }}>Empty</div> : cart.map((item) => (<div key={item.cartId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #eee' }}><div style={{ flex: 1 }}><div style={{ fontWeight: '500', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px' }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', background: item.vendorColor }} />{item.name}</div><div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}><button style={{ width: '22px', height: '22px', borderRadius: '4px', border: '1px solid #ddd', background: '#f5f5f5', cursor: 'pointer', fontSize: '12px' }} onClick={() => item.quantity > (item.isWeight ? 0.1 : 1) && updateCartItem(item.cartId, { quantity: item.isWeight ? +(item.quantity - 0.1).toFixed(2) : item.quantity - 1 })}>-</button><span style={{ fontSize: '12px', minWidth: '40px', textAlign: 'center' }}>{item.isWeight ? item.quantity.toFixed(2) : item.quantity}</span><button style={{ width: '22px', height: '22px', borderRadius: '4px', border: '1px solid #ddd', background: '#f5f5f5', cursor: 'pointer', fontSize: '12px' }} onClick={() => updateCartItem(item.cartId, { quantity: item.isWeight ? +(item.quantity + 0.1).toFixed(2) : item.quantity + 1 })}>+</button><span style={{ fontSize: '10px', color: '#888' }}>× ${item.price.toFixed(2)}</span></div></div><div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ fontWeight: '600', color: '#0f6e56', fontSize: '12px' }}>${item.total.toFixed(2)}</span><button style={{ width: '20px', height: '20px', borderRadius: '4px', border: 'none', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: '10px' }} onClick={() => removeCartItem(item.cartId)}>✕</button></div></div>))}</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderTop: '2px solid #0f6e56', fontSize: '16px', fontWeight: '700' }}><span>Total</span><span style={{ color: '#0f6e56' }}>${cartTotal.toFixed(2)}</span></div>
+          <button style={{ ...styles.button, ...styles.primaryBtn, width: '100%', padding: '12px', fontSize: '14px', opacity: cart.length === 0 ? 0.5 : 1 }} disabled={cart.length === 0} onClick={() => setShowPayment(true)}>💳 Pay Now</button>
+        </div>
+      );
+
+      // POS VIEW
+      const renderPOS = () => (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '16px', padding: '16px', maxWidth: '1500px', margin: '0 auto' }}>
+          <div style={styles.card}>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}><input style={{ ...styles.input, flex: '1', minWidth: '140px' }} placeholder="🔍 Scan barcode..." value={scannerInput} onChange={e => setScannerInput(e.target.value)} onKeyPress={e => { if (e.key === 'Enter') { const result = findProductByBarcode(scannerInput); if (result) { if (result.product.unitType === 'weight') { setScaleProduct(result.product); simulateWeigh(); } else { addToCart(result.product, 1); } } setScannerInput(''); } }} /><select style={{ ...styles.input, width: '120px' }} value={vendorFilter} onChange={e => setVendorFilter(e.target.value)}><option value="all">All Vendors</option>{Object.values(vendors).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select>{hasPermission('inventory') && <button style={{ ...styles.button, ...styles.primaryBtn }} onClick={() => setEditingProduct({})}>➕</button>}</div>
+            <div style={{ display: 'flex', gap: '5px', marginBottom: '12px', flexWrap: 'wrap' }}>{CATEGORIES.map(cat => (<button key={cat.id} style={{ padding: '6px 12px', borderRadius: '14px', border: '2px solid ' + cat.color, background: selectedCategory === cat.id ? cat.color : 'white', color: selectedCategory === cat.id ? 'white' : cat.color, fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => setSelectedCategory(cat.id)}>{cat.icon} {cat.name}</button>))}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px' }}>{products[selectedCategory]?.filter(p => vendorFilter === 'all' || p.vendorId === vendorFilter).map(product => { const vendor = vendors[product.vendorId]; return (<div key={product.id} style={{ background: '#fafaf8', border: `1px solid ${product.stock < product.minStock ? '#fecaca' : '#e8e5dc'}`, borderRadius: '10px', padding: '10px', cursor: 'pointer', textAlign: 'center', position: 'relative' }} onClick={() => { if (product.unitType === 'weight') { setScaleProduct(product); simulateWeigh(); } else { addToCart(product, 1); } }}><span style={{ ...styles.vendorBadge, position: 'absolute', top: '6px', left: '6px', background: vendor?.color }}>{vendor?.name?.split(' ')[0]}</span><img src={product.image} alt="" style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '6px', marginBottom: '6px' }} /><div style={{ fontSize: '11px', fontWeight: '600', marginBottom: '3px', lineHeight: '1.2' }}>{product.name}</div><div style={{ fontSize: '13px', fontWeight: '700', color: '#0f6e56' }}>${product.price.toFixed(2)}<span style={{ fontSize: '9px', fontWeight: '400', color: '#666' }}>/{product.unit}</span></div><div style={{ fontSize: '9px', color: product.stock < product.minStock ? '#dc2626' : '#666', marginTop: '2px' }}>{product.unitType === 'weight' ? '⚖️ ' : ''}Stock: {product.stock}</div></div>); })}</div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>{scaleProduct && <ScalePanel product={scaleProduct} onAdd={addToCart} onCancel={() => { setScaleProduct(null); setWeight(0); }} />}<CartPanel /></div>
+        </div>
+      );
+
+      // KIOSK VIEW
+      const renderKiosk = () => {
+        const t = { en: { welcome: 'Welcome', basket: 'Your Basket', pay: 'Pay', clear: 'Clear' }, es: { welcome: 'Bienvenido', basket: 'Tu Canasta', pay: 'Pagar', clear: 'Borrar' } }[language];
+        return (
+          <div style={{ ...styles.app, paddingBottom: '160px' }}>
+            <button style={{ position: 'fixed', top: '12px', right: '12px', background: 'white', padding: '8px 12px', borderRadius: '16px', border: '1px solid #ddd', fontSize: '12px', cursor: 'pointer', zIndex: 100, fontFamily: 'inherit' }} onClick={() => setLanguage(language === 'en' ? 'es' : 'en')}>{language === 'en' ? '🇺🇸' : '🇲🇽'}</button>
+            {(hasPermission('pos') || hasPermission('all')) && <button style={{ position: 'fixed', top: '12px', left: '12px', background: '#0f6e56', color: 'white', padding: '8px 12px', borderRadius: '16px', border: 'none', fontSize: '11px', cursor: 'pointer', zIndex: 100, fontFamily: 'inherit' }} onClick={() => setView('pos')}>Exit Kiosk</button>}
+            <div style={{ maxWidth: '800px', margin: '0 auto', padding: '16px' }}>
+              <div style={{ textAlign: 'center', marginBottom: '20px' }}><div style={{ fontSize: '24px', fontWeight: '700', color: '#0f6e56' }}>🌱 {t.welcome}</div><div style={{ color: '#666', fontSize: '13px' }}>{settings.storeName}</div></div>
+              {scaleProduct && <ScalePanel product={scaleProduct} onAdd={addToCart} onCancel={() => { setScaleProduct(null); setWeight(0); }} />}
+              <div style={{ display: 'flex', gap: '5px', marginBottom: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>{CATEGORIES.map(cat => <button key={cat.id} style={{ padding: '8px 14px', borderRadius: '16px', border: '2px solid ' + cat.color, background: selectedCategory === cat.id ? cat.color : 'white', color: selectedCategory === cat.id ? 'white' : cat.color, fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => setSelectedCategory(cat.id)}>{cat.icon} {cat.name}</button>)}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>{products[selectedCategory]?.map(product => (<div key={product.id} style={{ background: 'white', borderRadius: '14px', padding: '12px', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', cursor: 'pointer' }} onClick={() => { if (product.unitType === 'weight') { setScaleProduct(product); simulateWeigh(); } else { addToCart(product, 1); } }}><img src={product.image} alt="" style={{ width: '100%', height: '90px', objectFit: 'cover', borderRadius: '10px', marginBottom: '8px' }} /><div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>{product.name}</div><div style={{ fontSize: '15px', fontWeight: '700', color: '#0f6e56' }}>${product.price.toFixed(2)}<span style={{ fontSize: '10px', fontWeight: '400', color: '#666' }}>/{product.unit}</span></div></div>))}</div>
+            </div>
+            {showKioskCart && (<div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200 }} onClick={() => setShowKioskCart(false)}><div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'white', borderRadius: '20px 20px 0 0', padding: '20px', maxHeight: '70vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}><h3 style={{ margin: '0 0 16px', fontSize: '18px' }}>🛒 {t.basket}</h3>{cart.map(item => (<div key={item.cartId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #eee' }}><div><div style={{ fontWeight: '500', fontSize: '13px' }}>{item.name}</div><div style={{ fontSize: '12px', color: '#888' }}>{item.isWeight ? item.quantity.toFixed(2) + ' lb' : item.quantity} × ${item.price.toFixed(2)}</div></div><div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ fontWeight: '600', color: '#0f6e56' }}>${item.total.toFixed(2)}</span><button style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: '12px' }} onClick={() => removeCartItem(item.cartId)}>✕</button></div></div>))}<div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderTop: '2px solid #0f6e56', fontSize: '20px', fontWeight: '700', marginTop: '10px' }}><span>Total</span><span style={{ color: '#0f6e56' }}>${cartTotal.toFixed(2)}</span></div><button style={{ ...styles.button, ...styles.primaryBtn, width: '100%', padding: '16px', fontSize: '16px' }} disabled={cart.length === 0} onClick={() => { setShowKioskCart(false); setShowPayment(true); }}>{t.pay} →</button></div></div>)}
+            <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'white', padding: '14px 20px', boxShadow: '0 -4px 20px rgba(0,0,0,0.12)', borderRadius: '20px 20px 0 0' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div onClick={() => cart.length > 0 && setShowKioskCart(true)} style={{ cursor: cart.length > 0 ? 'pointer' : 'default' }}><div style={{ fontSize: '12px', color: '#666' }}>{t.basket} ({cart.length})</div><div style={{ fontSize: '22px', fontWeight: '700', color: '#0f6e56' }}>${cartTotal.toFixed(2)}</div></div><div style={{ display: 'flex', gap: '10px' }}><button style={{ ...styles.button, ...styles.secondaryBtn }} onClick={() => setCart([])}>{t.clear}</button><button style={{ ...styles.button, ...styles.primaryBtn, padding: '12px 24px' }} disabled={cart.length === 0} onClick={() => setShowPayment(true)}>{t.pay} →</button></div></div></div>
+          </div>
+        );
+      };
+
+      // VENDORS VIEW
+      const renderVendors = () => (
+        <div style={{ padding: '16px', maxWidth: '1200px', margin: '0 auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}><h2 style={{ margin: 0, fontSize: '18px' }}>🤝 Vendors</h2><div style={{ display: 'flex', gap: '8px' }}><button style={{ ...styles.button, ...styles.secondaryBtn }} onClick={() => setShowSettlement(true)}>💰 Settlement</button><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={() => setEditingVendor({})}>➕ Add Vendor</button></div></div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '14px' }}>{Object.values(vendors).map(vendor => { const vendorProducts = Object.values(products).flat().filter(p => p.vendorId === vendor.id); return (<div key={vendor.id} style={{ ...styles.card, borderTop: `4px solid ${vendor.color}`, cursor: 'pointer' }} onClick={() => setEditingVendor(vendor)}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}><div><div style={{ fontWeight: '600', fontSize: '15px', marginBottom: '4px' }}>{vendor.name}</div><span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: '600', background: vendor.type === 'owner' ? '#dcfce7' : '#fef3c7', color: vendor.type === 'owner' ? '#166534' : '#92400e' }}>{vendor.type === 'owner' ? 'Farm Store' : 'Consignment'}</span></div><div style={{ textAlign: 'right' }}><div style={{ fontSize: '24px', fontWeight: '700', color: vendor.color }}>{vendor.commissionRate}%</div><div style={{ fontSize: '9px', color: '#888' }}>Commission</div></div></div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}><div style={{ background: '#f8f7f4', padding: '8px', borderRadius: '6px' }}><div style={{ fontWeight: '600', color: '#0f6e56' }}>{vendorProducts.length}</div><div style={{ fontSize: '10px', color: '#666' }}>Products</div></div><div style={{ background: '#f8f7f4', padding: '8px', borderRadius: '6px' }}><div style={{ fontWeight: '600', color: '#185FA5' }}>{vendor.paymentTerms}</div><div style={{ fontSize: '10px', color: '#666' }}>Terms</div></div></div></div>); })}</div>
+        </div>
+      );
+
+      // INVENTORY VIEW
+      const renderInventory = () => {
+        const allProducts = Object.values(products).flat();
+        const filtered = vendorFilter === 'all' ? allProducts : allProducts.filter(p => p.vendorId === vendorFilter);
+        return (
+          <div style={{ padding: '16px', maxWidth: '1400px', margin: '0 auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}><h2 style={{ margin: 0, fontSize: '18px' }}>📦 Inventory</h2><div style={{ display: 'flex', gap: '8px' }}><select style={{ ...styles.input, width: '150px' }} value={vendorFilter} onChange={e => setVendorFilter(e.target.value)}><option value="all">All Vendors</option>{Object.values(vendors).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={() => setEditingProduct({})}>➕ Add Product</button></div></div>
+            <div style={{ ...styles.card, overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px', fontSize: '12px' }}><thead><tr style={{ background: '#0f6e56', color: 'white' }}><th style={{ padding: '10px', textAlign: 'left' }}>Product</th><th style={{ padding: '10px', textAlign: 'left' }}>Vendor</th><th style={{ padding: '10px', textAlign: 'right' }}>Price</th><th style={{ padding: '10px', textAlign: 'right' }}>Stock</th><th style={{ padding: '10px', textAlign: 'center' }}>Actions</th></tr></thead><tbody>{filtered.map(product => { const vendor = vendors[product.vendorId]; return (<tr key={product.id} style={{ borderBottom: '1px solid #eee' }}><td style={{ padding: '10px' }}><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><img src={product.image} alt="" style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'cover' }} /><div><div style={{ fontWeight: '500' }}>{product.name}</div><div style={{ fontSize: '10px', color: '#888' }}>{product.category}</div></div></div></td><td style={{ padding: '10px' }}><span style={{ ...styles.vendorBadge, background: vendor?.color }}>{vendor?.name}</span></td><td style={{ padding: '10px', textAlign: 'right', fontWeight: '600' }}>${product.price.toFixed(2)}/{product.unit}</td><td style={{ padding: '10px', textAlign: 'right', fontWeight: '600', color: product.stock < product.minStock ? '#dc2626' : '#0f6e56' }}>{product.stock}{product.stock < product.minStock && ' ⚠️'}</td><td style={{ padding: '10px', textAlign: 'center' }}><button style={{ ...styles.button, ...styles.secondaryBtn, padding: '4px 10px', fontSize: '10px' }} onClick={() => setEditingProduct(product)}>Edit</button></td></tr>); })}</tbody></table></div>
+          </div>
+        );
+      };
+
+      // ADMIN VIEW (FIXED - no hooks inside, using component-level state)
+      const renderAdmin = () => {
+        const saveAdminSettings = () => { setAdminSaving(true); Object.assign(SETTINGS, localSettings); setSettings({ ...SETTINGS }); setTimeout(() => setAdminSaving(false), 500); };
+        const testDbConnection = async () => { setTestingDb(true); await new Promise(r => setTimeout(r, 1500)); setLocalSettings(s => ({ ...s, dbConnected: true, dbLastSync: new Date().toISOString() })); setTestingDb(false); };
+        const testFarmosConnection = async () => { setTestingFarmos(true); await new Promise(r => setTimeout(r, 1500)); setLocalSettings(s => ({ ...s, farmosStatus: s.farmosUrl ? 'connected' : 'disconnected', farmosLastSync: new Date().toISOString() })); setTestingFarmos(false); };
+
+        const adminSections = [{ id: 'store', label: '🏪 Store' }, { id: 'users', label: '👥 Users' }, { id: 'devices', label: '🔌 Devices' }, { id: 'payments', label: '💳 Payments' }, { id: 'database', label: '🗄️ Database' }, { id: 'farmos', label: '🌱 farmOS' }];
+
+        return (
+          <div style={{ padding: '16px', maxWidth: '1000px', margin: '0 auto' }}>
+            <h2 style={{ margin: '0 0 16px', fontSize: '18px' }}>⚙️ Admin Settings</h2>
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' }}>{adminSections.map(sec => (<button key={sec.id} style={{ ...styles.button, ...(adminSection === sec.id ? styles.primaryBtn : styles.secondaryBtn), fontSize: '11px' }} onClick={() => setAdminSection(sec.id)}>{sec.label}</button>))}</div>
+
+            {adminSection === 'store' && (<div style={styles.card}><h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>🏪 Store Information</h3><div style={{ display: 'grid', gap: '12px' }}><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Store Name</label><input style={styles.input} value={localSettings.storeName} onChange={e => setLocalSettings({ ...localSettings, storeName: e.target.value })} /></div><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Address</label><input style={styles.input} value={localSettings.storeAddress} onChange={e => setLocalSettings({ ...localSettings, storeAddress: e.target.value })} /></div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Phone</label><input style={styles.input} value={localSettings.storePhone} onChange={e => setLocalSettings({ ...localSettings, storePhone: e.target.value })} /></div><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Email</label><input style={styles.input} value={localSettings.storeEmail} onChange={e => setLocalSettings({ ...localSettings, storeEmail: e.target.value })} /></div></div><div style={{ borderTop: '1px solid #eee', paddingTop: '12px', marginTop: '4px' }}><h4 style={{ margin: '0 0 10px', fontSize: '13px' }}>Receipt Settings</h4><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Receipt Header</label><input style={styles.input} value={localSettings.receiptHeader} onChange={e => setLocalSettings({ ...localSettings, receiptHeader: e.target.value })} /></div><div style={{ marginTop: '10px' }}><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Receipt Footer</label><input style={styles.input} value={localSettings.receiptFooter} onChange={e => setLocalSettings({ ...localSettings, receiptFooter: e.target.value })} /></div></div><div style={{ borderTop: '1px solid #eee', paddingTop: '12px', marginTop: '4px' }}><h4 style={{ margin: '0 0 10px', fontSize: '13px' }}>Kiosk Settings</h4><div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}><input type="checkbox" checked={localSettings.kioskEnabled} onChange={e => setLocalSettings({ ...localSettings, kioskEnabled: e.target.checked })} /> Kiosk Mode Enabled</label><div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><label style={{ fontSize: '12px' }}>Timeout (sec):</label><input style={{ ...styles.input, width: '80px' }} type="number" value={localSettings.kioskTimeout} onChange={e => setLocalSettings({ ...localSettings, kioskTimeout: parseInt(e.target.value) })} /></div></div></div><button style={{ ...styles.button, ...styles.primaryBtn, marginTop: '8px' }} onClick={saveAdminSettings} disabled={adminSaving}>{adminSaving ? 'Saving...' : '💾 Save Store Settings'}</button></div></div>)}
+
+            {adminSection === 'users' && (<div style={styles.card}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}><h3 style={{ margin: 0, fontSize: '15px' }}>👥 User Management</h3><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={() => setEditingUser({})}>➕ Add User</button></div><div style={{ display: 'grid', gap: '8px' }}>{users.map(u => (<div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8f7f4', borderRadius: '8px', cursor: 'pointer' }} onClick={() => setEditingUser(u)}><div><div style={{ fontWeight: '600', fontSize: '13px' }}>{u.name}</div><div style={{ fontSize: '11px', color: '#666' }}>@{u.username} • {u.email || 'No email'}</div></div><div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ padding: '3px 10px', borderRadius: '10px', fontSize: '10px', fontWeight: '600', background: u.role === 'admin' ? '#fef3c7' : u.role === 'manager' ? '#e0e7ff' : '#f0fdf4', color: u.role === 'admin' ? '#92400e' : u.role === 'manager' ? '#4338ca' : '#166534' }}>{u.role}</span>{!u.active && <span style={{ padding: '3px 8px', borderRadius: '10px', fontSize: '9px', background: '#fef2f2', color: '#b91c1c' }}>Inactive</span>}</div></div>))}</div></div>)}
+
+            {adminSection === 'devices' && (<div style={styles.card}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}><h3 style={{ margin: 0, fontSize: '15px' }}>🔌 Peripheral Devices</h3><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={() => setEditingDevice({})}>➕ Add Device</button></div><div style={{ display: 'grid', gap: '8px' }}>{devices.map(device => { const icons = { scanner: '📷', printer: '🖨️', scale: '⚖️', cashDrawer: '💵', cardReader: '💳', labelPrinter: '🏷️', customerDisplay: '🖥️' }; return (<div key={device.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderRadius: '10px', border: `2px solid ${device.status === 'connected' ? '#22c55e' : '#f59e0b'}`, background: device.enabled ? 'white' : '#f9fafb', opacity: device.enabled ? 1 : 0.7, cursor: 'pointer' }} onClick={() => setEditingDevice(device)}><div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><span style={{ fontSize: '24px' }}>{icons[device.type]}</span><div><div style={{ fontWeight: '600', fontSize: '13px' }}>{device.name}</div><div style={{ fontSize: '10px', color: '#666' }}>{device.model} • {device.connection.toUpperCase()}</div></div></div><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><span style={{ padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: '600', background: device.status === 'connected' ? '#dcfce7' : '#fef3c7', color: device.status === 'connected' ? '#166534' : '#92400e' }}>{device.status}</span></div></div>); })}</div></div>)}
+
+            {adminSection === 'payments' && (<div style={styles.card}><h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>💳 Payment Processing</h3><div style={{ display: 'grid', gap: '12px' }}><div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Select Payment Processor</div><div style={{ display: 'grid', gap: '8px' }}>{PAYMENT_PROCESSORS.map(proc => (<div key={proc.id} onClick={() => setLocalSettings({ ...localSettings, paymentProcessor: proc.id })} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px', borderRadius: '10px', border: localSettings.paymentProcessor === proc.id ? '2px solid #0f6e56' : '2px solid #e0ddd5', cursor: 'pointer', background: localSettings.paymentProcessor === proc.id ? '#f0fdf4' : 'white' }}><div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><span style={{ fontSize: '24px' }}>{proc.logo}</span><div><div style={{ fontWeight: '600', fontSize: '14px' }}>{proc.name} {proc.recommended && <span style={{ color: '#0f6e56', fontSize: '12px' }}>★ Recommended</span>}</div><div style={{ fontSize: '11px', color: '#666' }}>{proc.features}</div></div></div><div style={{ textAlign: 'right' }}><div style={{ fontWeight: '700', color: '#0f6e56' }}>{proc.rate}</div><div style={{ fontSize: '10px', color: '#888' }}>per transaction</div></div></div>))}</div><div style={{ borderTop: '1px solid #eee', paddingTop: '12px', marginTop: '4px' }}><h4 style={{ margin: '0 0 10px', fontSize: '13px' }}>API Configuration</h4><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>API Key / Secret Key</label><input style={styles.input} type="password" placeholder={`${localSettings.paymentProcessor} API key`} value={localSettings.paymentApiKey} onChange={e => setLocalSettings({ ...localSettings, paymentApiKey: e.target.value })} /></div><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', marginTop: '10px' }}><input type="checkbox" checked={localSettings.paymentTestMode} onChange={e => setLocalSettings({ ...localSettings, paymentTestMode: e.target.checked })} /> Test Mode (no real charges)</label></div><div style={{ background: '#f0f9ff', padding: '12px', borderRadius: '8px', fontSize: '11px', color: '#0369a1' }}><strong>💡 Recommended for Self-Service:</strong> Stripe Terminal M2 ($59) - tap/chip/swipe, Bluetooth, best API for unattended payments.</div><button style={{ ...styles.button, ...styles.primaryBtn, marginTop: '8px' }} onClick={saveAdminSettings} disabled={adminSaving}>{adminSaving ? 'Saving...' : '💾 Save Payment Settings'}</button></div></div>)}
+
+            {adminSection === 'database' && (<div style={styles.card}><h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>🗄️ Database Configuration</h3><div style={{ display: 'grid', gap: '12px' }}><div style={{ padding: '12px', borderRadius: '8px', background: localSettings.dbConnected ? '#dcfce7' : '#fef2f2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: localSettings.dbConnected ? '#166534' : '#b91c1c' }}>{localSettings.dbConnected ? '✓ Connected' : '✗ Disconnected'}</div>{localSettings.dbLastSync && <div style={{ fontSize: '10px', color: '#666' }}>Last sync: {new Date(localSettings.dbLastSync).toLocaleString()}</div>}</div><button style={{ ...styles.button, ...(localSettings.dbConnected ? styles.secondaryBtn : styles.primaryBtn) }} onClick={testDbConnection} disabled={testingDb}>{testingDb ? 'Testing...' : 'Test Connection'}</button></div><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Database Type</label><select style={styles.input} value={localSettings.dbType} onChange={e => setLocalSettings({ ...localSettings, dbType: e.target.value })}><option value="postgresql">PostgreSQL</option><option value="sqlite">SQLite (Local)</option><option value="odoo">Odoo Backend</option></select></div>{localSettings.dbType !== 'sqlite' && (<><div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Host</label><input style={styles.input} value={localSettings.dbHost} onChange={e => setLocalSettings({ ...localSettings, dbHost: e.target.value })} /></div><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Port</label><input style={styles.input} type="number" value={localSettings.dbPort} onChange={e => setLocalSettings({ ...localSettings, dbPort: parseInt(e.target.value) })} /></div></div><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Database Name</label><input style={styles.input} value={localSettings.dbName} onChange={e => setLocalSettings({ ...localSettings, dbName: e.target.value })} /></div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Username</label><input style={styles.input} value={localSettings.dbUser} onChange={e => setLocalSettings({ ...localSettings, dbUser: e.target.value })} /></div><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Password</label><input style={styles.input} type="password" value={localSettings.dbPassword} onChange={e => setLocalSettings({ ...localSettings, dbPassword: e.target.value })} /></div></div></>)}<div style={{ background: '#f0f9ff', padding: '12px', borderRadius: '8px', fontSize: '11px', color: '#0369a1' }}><strong>💡 Raspberry Pi 5:</strong> PostgreSQL pre-installed. Default: localhost:5432, database: farm_pos</div><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={saveAdminSettings} disabled={adminSaving}>{adminSaving ? 'Saving...' : '💾 Save Database Settings'}</button></div></div>)}
+
+            {adminSection === 'farmos' && (<div style={styles.card}><h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>🌱 farmOS Integration</h3><div style={{ display: 'grid', gap: '12px' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8f7f4', borderRadius: '8px' }}><div><span style={{ fontWeight: '600' }}>Enable farmOS Sync</span><div style={{ fontSize: '11px', color: '#666' }}>Sync harvests, sales, and inventory</div></div><button style={{ ...styles.toggle, background: localSettings.farmosEnabled ? '#0f6e56' : '#ccc' }} onClick={() => setLocalSettings({ ...localSettings, farmosEnabled: !localSettings.farmosEnabled })}><div style={{ ...styles.toggleKnob, left: localSettings.farmosEnabled ? '23px' : '3px' }} /></button></div>{localSettings.farmosEnabled && (<><div style={{ padding: '12px', borderRadius: '8px', background: localSettings.farmosStatus === 'connected' ? '#dcfce7' : '#fef3c7', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: localSettings.farmosStatus === 'connected' ? '#166534' : '#92400e' }}>{localSettings.farmosStatus === 'connected' ? '✓ Connected' : '○ Not connected'}</div>{localSettings.farmosLastSync && <div style={{ fontSize: '10px', color: '#666' }}>Last sync: {new Date(localSettings.farmosLastSync).toLocaleString()}</div>}</div><button style={{ ...styles.button, ...styles.secondaryBtn }} onClick={testFarmosConnection} disabled={testingFarmos}>{testingFarmos ? 'Testing...' : 'Test Connection'}</button></div><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>farmOS Server URL</label><input style={styles.input} value={localSettings.farmosUrl} onChange={e => setLocalSettings({ ...localSettings, farmosUrl: e.target.value })} placeholder="https://your-farm.farmos.net" /></div><div style={{ background: '#f8f7f4', padding: '12px', borderRadius: '8px' }}><div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '10px' }}>OAuth 2.0 Credentials</div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '10px', color: '#666' }}>Client ID</label><input style={{ ...styles.input, padding: '8px' }} value={localSettings.farmosClientId} onChange={e => setLocalSettings({ ...localSettings, farmosClientId: e.target.value })} /></div><div><label style={{ fontSize: '10px', color: '#666' }}>Client Secret</label><input style={{ ...styles.input, padding: '8px' }} type="password" value={localSettings.farmosClientSecret} onChange={e => setLocalSettings({ ...localSettings, farmosClientSecret: e.target.value })} /></div></div></div><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><label style={{ fontSize: '12px' }}>Sync Interval:</label><select style={{ ...styles.input, width: '150px' }} value={localSettings.farmosSyncInterval} onChange={e => setLocalSettings({ ...localSettings, farmosSyncInterval: parseInt(e.target.value) })}><option value={5}>Every 5 minutes</option><option value={15}>Every 15 minutes</option><option value={30}>Every 30 minutes</option><option value={60}>Every hour</option></select></div><div style={{ background: '#f0fdf4', padding: '12px', borderRadius: '8px' }}><div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px', color: '#0f6e56' }}>Sync Options</div><div style={{ display: 'grid', gap: '6px' }}><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}><input type="checkbox" checked={localSettings.farmosSyncHarvests} onChange={e => setLocalSettings({ ...localSettings, farmosSyncHarvests: e.target.checked })} /> Harvest logs → Inventory</label><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}><input type="checkbox" checked={localSettings.farmosSyncSales} onChange={e => setLocalSettings({ ...localSettings, farmosSyncSales: e.target.checked })} /> Sales → farmOS observations</label><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}><input type="checkbox" checked={localSettings.farmosSyncInventory} onChange={e => setLocalSettings({ ...localSettings, farmosSyncInventory: e.target.checked })} /> Import farmOS assets as products</label></div></div></>)}<button style={{ ...styles.button, ...styles.primaryBtn }} onClick={saveAdminSettings} disabled={adminSaving}>{adminSaving ? 'Saving...' : '💾 Save farmOS Settings'}</button></div></div>)}
+          </div>
+        );
+      };
+
+      // SETTLEMENT MODAL
+      const SettlementModal = () => (
+        <div style={styles.modal} onClick={() => setShowSettlement(false)}><div style={{ ...styles.modalContent, maxWidth: '700px' }} onClick={e => e.stopPropagation()}><h2 style={{ margin: '0 0 16px', fontSize: '18px' }}>💰 Settlement Report</h2><div style={{ display: 'grid', gap: '10px' }}>{Object.values(vendors).filter(v => v.type === 'consignment').map(vendor => (<div key={vendor.id} style={{ padding: '14px', borderRadius: '10px', border: `2px solid ${vendor.color}` }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ width: '10px', height: '10px', borderRadius: '50%', background: vendor.color }} /><span style={{ fontWeight: '600' }}>{vendor.name}</span><span style={{ fontSize: '10px', color: '#888' }}>{vendor.commissionRate}%</span></div><button style={{ ...styles.button, ...styles.primaryBtn, padding: '4px 10px', fontSize: '10px' }}>Process</button></div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginTop: '10px', fontSize: '11px' }}><div><div style={{ color: '#888' }}>Gross</div><div style={{ fontWeight: '600' }}>$0.00</div></div><div><div style={{ color: '#888' }}>Commission</div><div style={{ fontWeight: '600', color: '#dc2626' }}>-$0.00</div></div><div><div style={{ color: '#888' }}>Net Payable</div><div style={{ fontWeight: '700', color: '#0f6e56' }}>$0.00</div></div></div></div>))}</div><button style={{ ...styles.button, ...styles.secondaryBtn, width: '100%', marginTop: '16px' }} onClick={() => setShowSettlement(false)}>Close</button></div></div>
+      );
+
+      // MAIN RENDER
+      const dbClass = dbStatus.connected && dbStatus.tablesExist ? 'connected' : dbStatus.connected ? 'partial' : 'demo';
+      const dbText = dbStatus.loading ? '⏳' : dbStatus.connected && dbStatus.tablesExist ? '🟢 Supabase' : dbStatus.connected ? '🟡 No Tables' : '🟠 Demo';
+      
+      return (
+        <div style={styles.app}>
+          <div className={`db-status ${dbClass}`} title={dbStatus.error || (dbStatus.connected ? 'Connected' : 'Demo mode')}>{dbText}</div>
+          <header style={styles.header}><div style={styles.logo}><span style={{ fontSize: '22px' }}>🌱</span><div><div>{settings.storeName.split(' ').slice(0, 3).join(' ')}</div><div style={{ fontSize: '9px', opacity: 0.8, fontWeight: '400' }}>{user.role.charAt(0).toUpperCase() + user.role.slice(1)}: {user.name}</div></div></div><div style={styles.tabs}>{availableViews.map(tab => (<button key={tab.id} style={{ ...styles.tab, ...(view === tab.id ? styles.tabActive : styles.tabInactive) }} onClick={() => setView(tab.id)}>{tab.label}</button>))}</div><button style={{ ...styles.button, background: 'rgba(255,255,255,0.15)', color: 'white', fontSize: '11px' }} onClick={logout}>Logout</button></header>
+          {view === 'pos' && renderPOS()}
+          {view === 'kiosk' && renderKiosk()}
+          {view === 'vendors' && renderVendors()}
+          {view === 'inventory' && renderInventory()}
+          {view === 'admin' && renderAdmin()}
+          {editingProduct !== null && <ProductEditModal product={editingProduct.id ? editingProduct : null} onClose={() => setEditingProduct(null)} />}
+          {editingVendor !== null && <VendorEditModal vendor={editingVendor.id ? editingVendor : null} onClose={() => setEditingVendor(null)} />}
+          {editingUser !== null && <UserEditModal userToEdit={editingUser.id ? editingUser : null} onClose={() => setEditingUser(null)} />}
+          {editingDevice !== null && <DeviceEditModal deviceToEdit={editingDevice.id ? editingDevice : null} onClose={() => setEditingDevice(null)} />}
+          {showPayment && <PaymentModal />}
+          {showSettlement && <SettlementModal />}
+        </div>
+      );
+    }
+
+    // APP ROOT
+    function App() { return <AuthProvider><AppContent /></AuthProvider>; }
+    function AppContent() { const { user, loading } = useAuth(); if (loading) return <div className="loading">Loading...</div>; return user ? <MainApp /> : <LoginScreen />; }
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
