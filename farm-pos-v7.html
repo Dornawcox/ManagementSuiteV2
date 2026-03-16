@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Farm POS v7.4</title>
+  <title>Farm POS v7.5</title>
   <meta name="description" content="Cooperative Farm Store POS with multi-vendor consignment, role-based access, and peripheral device management">
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
@@ -19,7 +19,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
   
   <script>
-    console.log('[POS] === VERSION 7.4 LOADING ===');
+    console.log('[POS] === VERSION 7.5 LOADING ===');
     
     // Check for URL parameters to set Supabase credentials
     (function() {
@@ -334,6 +334,52 @@
           console.log('[POS] Product deleted:', id);
           return true;
         } catch(e) { console.error('[POS] deleteProduct exception:', e); return false; }
+      },
+      
+      deleteVendor: async function(id) {
+        if (!this.client) return { success: false, error: 'Not connected' };
+        try {
+          // Check if vendor has any products
+          var prodCheck = await this.client.from('pos_products').select('id').eq('vendor_id', id).eq('is_active', true).limit(1);
+          if (prodCheck.data && prodCheck.data.length > 0) {
+            return { success: false, error: 'Cannot delete vendor with active products. Delete or reassign products first.' };
+          }
+          // Check if vendor has any transactions
+          var txCheck = await this.client.from('pos_transaction_items').select('id').eq('vendor_id', id).limit(1);
+          if (txCheck.data && txCheck.data.length > 0) {
+            // Soft delete - has transaction history
+            var r = await this.client.from('pos_vendors').update({ is_active: false }).eq('id', id);
+            if (r.error) { console.error('[POS] deleteVendor error:', r.error); return { success: false, error: r.error.message }; }
+            console.log('[POS] Vendor soft deleted (has transactions):', id);
+            return { success: true, softDelete: true };
+          }
+          // Hard delete - no transaction history
+          var r = await this.client.from('pos_vendors').delete().eq('id', id);
+          if (r.error) { console.error('[POS] deleteVendor error:', r.error); return { success: false, error: r.error.message }; }
+          console.log('[POS] Vendor hard deleted:', id);
+          return { success: true };
+        } catch(e) { console.error('[POS] deleteVendor exception:', e); return { success: false, error: e.message }; }
+      },
+      
+      // Mark settlement as paid
+      markSettlementPaid: async function(vendorId, periodStart, periodEnd, grossSales, commission, netPayable) {
+        if (!this.client) return { success: false, error: 'Not connected' };
+        try {
+          var settlement = {
+            vendor_id: vendorId,
+            period_start: periodStart,
+            period_end: periodEnd,
+            gross_sales: grossSales,
+            commission: commission,
+            net_payable: netPayable,
+            status: 'paid',
+            paid_at: new Date().toISOString()
+          };
+          var r = await this.client.from('pos_settlements').insert(settlement).select().single();
+          if (r.error) { console.error('[POS] markSettlementPaid error:', r.error); return { success: false, error: r.error.message }; }
+          console.log('[POS] Settlement marked paid:', r.data.id);
+          return { success: true, data: r.data };
+        } catch(e) { console.error('[POS] markSettlementPaid exception:', e); return { success: false, error: e.message }; }
       },
       
       // Seed demo data to Supabase
@@ -1006,7 +1052,7 @@
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666' }}>Category</label><select style={styles.input} value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>{CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}</select></div><div><label style={{ fontSize: '11px', color: '#666' }}>Price *</label><input style={styles.input} type="number" step="0.01" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} /></div><div><label style={{ fontSize: '11px', color: '#666' }}>Stock</label><input style={styles.input} type="number" value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} /></div></div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666' }}>Unit Type</label><select style={styles.input} value={form.unitType} onChange={e => { const ut = UNIT_TYPES.find(u => u.id === e.target.value); setForm({ ...form, unitType: e.target.value, unit: ut.units[0] }); }}>{UNIT_TYPES.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select></div><div><label style={{ fontSize: '11px', color: '#666' }}>Unit</label><select style={styles.input} value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })}>{selectedUnitType?.units.map(u => <option key={u} value={u}>{u}</option>)}</select></div></div>
               <div><label style={{ fontSize: '11px', color: '#666' }}>SKU / Barcode</label><div style={{ display: 'flex', gap: '8px' }}><input style={{ ...styles.input, flex: 1 }} placeholder="e.g., VEG-12345" value={form.barcode} onChange={e => setForm({ ...form, barcode: e.target.value })} /><button type="button" style={{ ...styles.button, ...styles.secondaryBtn, padding: '8px 12px', fontSize: '11px' }} onClick={generateSKU}>🎲 Generate</button></div></div>
-              <div><label style={{ fontSize: '11px', color: '#666' }}>Product Image URL</label><input style={styles.input} placeholder="https://example.com/image.jpg" value={form.image || ''} onChange={e => setForm({ ...form, image: e.target.value })} />{form.image && <div style={{ marginTop: '8px', textAlign: 'center' }}><img src={form.image} alt="Preview" style={{ maxWidth: '120px', maxHeight: '80px', borderRadius: '8px', objectFit: 'cover', border: '1px solid #ddd' }} onError={e => e.target.style.display = 'none'} /></div>}</div>
+              <div><label style={{ fontSize: '11px', color: '#666' }}>Product Image</label><div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}><input style={{ ...styles.input, flex: 1 }} placeholder="https://example.com/image.jpg" value={form.image || ''} onChange={e => setForm({ ...form, image: e.target.value })} /><label style={{ ...styles.button, ...styles.secondaryBtn, padding: '8px 12px', fontSize: '11px', cursor: 'pointer', margin: 0 }}>📷<input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const maxSize = 800; let w = img.width, h = img.height; if (w > maxSize || h > maxSize) { if (w > h) { h = h * maxSize / w; w = maxSize; } else { w = w * maxSize / h; h = maxSize; } } canvas.width = w; canvas.height = h; canvas.getContext('2d').drawImage(img, 0, 0, w, h); setForm({ ...form, image: canvas.toDataURL('image/jpeg', 0.8) }); }; img.src = ev.target.result; }; reader.readAsDataURL(file); } }} /></label></div>{form.image && <div style={{ marginTop: '8px', textAlign: 'center' }}><img src={form.image} alt="Preview" style={{ maxWidth: '120px', maxHeight: '80px', borderRadius: '8px', objectFit: 'cover', border: '1px solid #ddd' }} onError={e => e.target.style.display = 'none'} /><button type="button" style={{ display: 'block', margin: '4px auto 0', fontSize: '10px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setForm({ ...form, image: '' })}>✕ Remove</button></div>}</div>
               <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>{product?.id && <button style={{ ...styles.button, ...styles.dangerBtn }} onClick={handleDelete}>Delete</button>}<button style={{ ...styles.button, ...styles.secondaryBtn, flex: 1 }} onClick={onClose}>Cancel</button><button style={{ ...styles.button, ...styles.primaryBtn, flex: 2 }} onClick={handleSave} disabled={!form.name || !form.price || saving}>{saving ? 'Saving...' : 'Save'}</button></div>
             </div>
           </div></div>
@@ -1037,6 +1083,35 @@
           VENDORS[id] = data;
           setVendors({ ...VENDORS }); setSaving(false); onClose();
         };
+        const handleDelete = async () => {
+          if (!confirm('Delete this vendor? This cannot be undone if vendor has no transaction history.')) return;
+          setSaving(true);
+          setSaveError(null);
+          
+          if (dbStatus.connected && dbStatus.tablesExist) {
+            const result = await window.SUPABASE_POS.deleteVendor(vendor.id);
+            if (!result.success) {
+              setSaveError(result.error || 'Failed to delete');
+              setSaving(false);
+              return;
+            }
+            if (result.softDelete) {
+              // Just mark as inactive locally
+              VENDORS[vendor.id].active = false;
+              setVendors({ ...VENDORS });
+              alert('Vendor deactivated (has transaction history).');
+            } else {
+              // Remove from local
+              delete VENDORS[vendor.id];
+              setVendors({ ...VENDORS });
+            }
+          } else {
+            delete VENDORS[vendor.id];
+            setVendors({ ...VENDORS });
+          }
+          setSaving(false);
+          onClose();
+        };
         return (
           <div style={styles.modal} onClick={onClose}><div style={styles.modalContent} onClick={e => e.stopPropagation()}>
             <h2 style={{ margin: '0 0 20px', fontSize: '18px' }}>{vendor?.id ? '✏️ Edit Vendor' : '➕ New Vendor'}</h2>
@@ -1048,7 +1123,7 @@
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666' }}>Payment</label><select style={styles.input} value={form.paymentMethod} onChange={e => setForm({ ...form, paymentMethod: e.target.value })}><option value="check">Check</option><option value="ach">ACH</option></select></div><div><label style={{ fontSize: '11px', color: '#666' }}>Terms</label><select style={styles.input} value={form.paymentTerms} onChange={e => setForm({ ...form, paymentTerms: e.target.value })}><option value="net-7">Net 7</option><option value="net-15">Net 15</option><option value="net-30">Net 30</option></select></div></div>
               <input style={styles.input} placeholder="Contact email" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} />
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><label style={{ fontSize: '12px' }}>Color:</label><input type="color" value={form.color} onChange={e => setForm({ ...form, color: e.target.value })} style={{ width: '50px', height: '32px', border: 'none' }} /><label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}><input type="checkbox" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} /> Active</label></div>
-              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}><button style={{ ...styles.button, ...styles.secondaryBtn, flex: 1 }} onClick={onClose}>Cancel</button><button style={{ ...styles.button, ...styles.primaryBtn, flex: 2 }} onClick={handleSave} disabled={!form.name || saving}>{saving ? 'Saving...' : 'Save'}</button></div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>{vendor?.id && <button style={{ ...styles.button, ...styles.dangerBtn }} onClick={handleDelete} disabled={saving}>🗑️ Delete</button>}<button style={{ ...styles.button, ...styles.secondaryBtn, flex: 1 }} onClick={onClose}>Cancel</button><button style={{ ...styles.button, ...styles.primaryBtn, flex: 2 }} onClick={handleSave} disabled={!form.name || saving}>{saving ? 'Saving...' : 'Save'}</button></div>
             </div>
           </div></div>
         );
@@ -1228,6 +1303,9 @@
 
       // SETTLEMENT MODAL
       const SettlementModal = () => {
+        const [processing, setProcessing] = useState(null);
+        const [paidVendors, setPaidVendors] = useState({});
+        
         // Calculate settlements from transactions state (loaded from Supabase)
         const vendorTotals = {};
         transactions.forEach(tx => {
@@ -1241,6 +1319,29 @@
           });
         });
         
+        const handleMarkPaid = async (vendor, totals, commission, netPayable) => {
+          if (!confirm(`Mark ${vendor.name} as paid?\n\nGross: $${totals.gross.toFixed(2)}\nCommission: -$${commission.toFixed(2)}\nNet Payable: $${netPayable.toFixed(2)}`)) return;
+          
+          setProcessing(vendor.id);
+          const today = new Date().toISOString().split('T')[0];
+          const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          
+          if (dbStatus.connected && dbStatus.tablesExist) {
+            const result = await window.SUPABASE_POS.markSettlementPaid(
+              vendor.id, thirtyDaysAgo, today, totals.gross, commission, netPayable
+            );
+            if (!result.success) {
+              alert('Error: ' + result.error);
+              setProcessing(null);
+              return;
+            }
+          }
+          
+          setPaidVendors(prev => ({ ...prev, [vendor.id]: { date: today, amount: netPayable } }));
+          setProcessing(null);
+          alert(`Settlement recorded!\n\nPaid $${netPayable.toFixed(2)} to ${vendor.name}`);
+        };
+        
         return (
           <div style={styles.modal} onClick={() => setShowSettlement(false)}>
             <div style={{ ...styles.modalContent, maxWidth: '700px' }} onClick={e => e.stopPropagation()}>
@@ -1249,25 +1350,34 @@
               <div style={{ display: 'grid', gap: '10px' }}>
                 {Object.values(vendors).filter(v => v.type === 'consignment').map(vendor => {
                   const totals = vendorTotals[vendor.id] || { gross: 0, items: 0, commission: 0 };
-                  // If commission not stored in transaction, calculate it
                   const commission = totals.commission > 0 ? totals.commission : totals.gross * (vendor.commissionRate / 100);
                   const netPayable = totals.gross - commission;
+                  const isPaid = paidVendors[vendor.id];
                   
                   return (
-                    <div key={vendor.id} style={{ padding: '14px', borderRadius: '10px', border: `2px solid ${vendor.color}`, background: totals.gross > 0 ? '#fafafa' : 'white' }}>
+                    <div key={vendor.id} style={{ padding: '14px', borderRadius: '10px', border: `2px solid ${isPaid ? '#22c55e' : vendor.color}`, background: isPaid ? '#f0fdf4' : totals.gross > 0 ? '#fafafa' : 'white' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: vendor.color }} />
                           <span style={{ fontWeight: '600' }}>{vendor.name}</span>
                           <span style={{ fontSize: '10px', color: '#888' }}>{vendor.commissionRate}% commission</span>
+                          {isPaid && <span style={{ fontSize: '10px', padding: '2px 6px', background: '#22c55e', color: 'white', borderRadius: '4px' }}>✓ Paid</span>}
                         </div>
-                        {totals.gross > 0 && <button style={{ ...styles.button, ...styles.primaryBtn, padding: '4px 10px', fontSize: '10px' }}>Mark Paid</button>}
+                        {totals.gross > 0 && !isPaid && (
+                          <button 
+                            style={{ ...styles.button, ...styles.primaryBtn, padding: '4px 10px', fontSize: '10px' }}
+                            onClick={() => handleMarkPaid(vendor, totals, commission, netPayable)}
+                            disabled={processing === vendor.id}
+                          >
+                            {processing === vendor.id ? 'Processing...' : 'Mark Paid'}
+                          </button>
+                        )}
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '10px', fontSize: '11px' }}>
                         <div><div style={{ color: '#888' }}>Items Sold</div><div style={{ fontWeight: '600' }}>{totals.items}</div></div>
                         <div><div style={{ color: '#888' }}>Gross Sales</div><div style={{ fontWeight: '600' }}>${totals.gross.toFixed(2)}</div></div>
                         <div><div style={{ color: '#888' }}>Commission</div><div style={{ fontWeight: '600', color: '#dc2626' }}>-${commission.toFixed(2)}</div></div>
-                        <div><div style={{ color: '#888' }}>Net Payable</div><div style={{ fontWeight: '700', color: '#0f6e56' }}>${netPayable.toFixed(2)}</div></div>
+                        <div><div style={{ color: '#888' }}>Net Payable</div><div style={{ fontWeight: '700', color: isPaid ? '#22c55e' : '#0f6e56' }}>${netPayable.toFixed(2)}</div></div>
                       </div>
                     </div>
                   );
