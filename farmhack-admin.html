@@ -1124,42 +1124,43 @@ ALTER TABLE pos_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pos_categories ENABLE ROW LEVEL SECURITY;
 
 -- ── RLS Policies ─────────────────────────────────────────────────────────────
--- Public read for products/vendors/categories (kiosk needs this)
+-- NOTE: These policies allow anonymous access for development/demo.
+-- For production, implement Supabase Auth and restrict to authenticated users.
+
+-- Public read/write for products/vendors/categories (development mode)
 CREATE POLICY "pos_vendors_select" ON pos_vendors FOR SELECT USING (true);
+CREATE POLICY "pos_vendors_insert" ON pos_vendors FOR INSERT WITH CHECK (true);
+CREATE POLICY "pos_vendors_update" ON pos_vendors FOR UPDATE USING (true);
+CREATE POLICY "pos_vendors_delete" ON pos_vendors FOR DELETE USING (true);
+
 CREATE POLICY "pos_products_select" ON pos_products FOR SELECT USING (true);
+CREATE POLICY "pos_products_insert" ON pos_products FOR INSERT WITH CHECK (true);
+CREATE POLICY "pos_products_update" ON pos_products FOR UPDATE USING (true);
+CREATE POLICY "pos_products_delete" ON pos_products FOR DELETE USING (true);
+
 CREATE POLICY "pos_categories_select" ON pos_categories FOR SELECT USING (true);
+CREATE POLICY "pos_categories_insert" ON pos_categories FOR INSERT WITH CHECK (true);
+CREATE POLICY "pos_categories_update" ON pos_categories FOR UPDATE USING (true);
+
 CREATE POLICY "pos_settings_select" ON pos_settings FOR SELECT USING (true);
+CREATE POLICY "pos_settings_insert" ON pos_settings FOR INSERT WITH CHECK (true);
+CREATE POLICY "pos_settings_update" ON pos_settings FOR UPDATE USING (true);
 
--- Authenticated users can read transactions
-CREATE POLICY "pos_transactions_select" ON pos_transactions FOR SELECT 
-  USING (auth.uid() IS NOT NULL);
-CREATE POLICY "pos_items_select" ON pos_transaction_items FOR SELECT 
-  USING (auth.uid() IS NOT NULL);
+-- Transactions - public write for POS kiosk
+CREATE POLICY "pos_transactions_select" ON pos_transactions FOR SELECT USING (true);
+CREATE POLICY "pos_transactions_insert" ON pos_transactions FOR INSERT WITH CHECK (true);
 
--- Managers/admins can insert/update
-CREATE POLICY "pos_vendors_insert" ON pos_vendors FOR INSERT 
-  WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','super_admin','manager'));
-CREATE POLICY "pos_vendors_update" ON pos_vendors FOR UPDATE 
-  USING ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','super_admin','manager'));
+CREATE POLICY "pos_items_select" ON pos_transaction_items FOR SELECT USING (true);
+CREATE POLICY "pos_items_insert" ON pos_transaction_items FOR INSERT WITH CHECK (true);
 
-CREATE POLICY "pos_products_insert" ON pos_products FOR INSERT 
-  WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','super_admin','manager'));
-CREATE POLICY "pos_products_update" ON pos_products FOR UPDATE 
-  USING ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','super_admin','manager'));
+-- Devices and settlements
+CREATE POLICY "pos_devices_select" ON pos_devices FOR SELECT USING (true);
+CREATE POLICY "pos_devices_insert" ON pos_devices FOR INSERT WITH CHECK (true);
+CREATE POLICY "pos_devices_update" ON pos_devices FOR UPDATE USING (true);
 
--- Any authenticated user can create transactions (cashier role)
-CREATE POLICY "pos_transactions_insert" ON pos_transactions FOR INSERT 
-  WITH CHECK (auth.uid() IS NOT NULL);
-CREATE POLICY "pos_items_insert" ON pos_transaction_items FOR INSERT 
-  WITH CHECK (auth.uid() IS NOT NULL);
-
--- Devices and settlements admin only
-CREATE POLICY "pos_devices_all" ON pos_devices FOR ALL 
-  USING ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','super_admin'));
-CREATE POLICY "pos_settlements_all" ON pos_settlements FOR ALL 
-  USING ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','super_admin','manager'));
-CREATE POLICY "pos_settings_update" ON pos_settings FOR UPDATE 
-  USING ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin','super_admin'));
+CREATE POLICY "pos_settlements_select" ON pos_settlements FOR SELECT USING (true);
+CREATE POLICY "pos_settlements_insert" ON pos_settlements FOR INSERT WITH CHECK (true);
+CREATE POLICY "pos_settlements_update" ON pos_settlements FOR UPDATE USING (true);
 
 -- ── Views ────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE VIEW pos_inventory_status AS
