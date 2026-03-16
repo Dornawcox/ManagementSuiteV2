@@ -17,133 +17,131 @@
   
   <script>
     // ============================================
-    // SUPABASE AUTO-CONNECT
-    // Reads Supabase credentials from FarmHack Admin and auto-connects
+    // SUPABASE LAZY CONNECTOR
+    // Does NOT connect on script load - call init() from React useEffect
     // ============================================
-    window.SUPABASE_POS = (function() {
-      var CRED_KEY = 'farmhack-supabase-v1';
-      var sb = null;
-      var connected = false;
-      var tablesExist = false;
-      var errorMsg = null;
+    window.SUPABASE_POS = {
+      client: null,
+      connected: false,
+      tablesExist: false,
+      error: null,
+      creds: null,
+      _initialized: false,
       
-      function getCreds() {
-        try { return JSON.parse(localStorage.getItem(CRED_KEY)) || null; }
-        catch(e) { return null; }
-      }
-      
-      var creds = getCreds();
-      
-      // Auto-initialize if credentials exist (use supabase global, same as farmhack-admin)
-      if (creds && creds.url && creds.anonKey && typeof supabase !== 'undefined') {
+      init: function() {
+        if (this._initialized) return this.connected;
+        this._initialized = true;
+        
         try {
-          sb = supabase.createClient(creds.url, creds.anonKey);
-          connected = true;
-          console.log('[POS] Supabase connected from FarmHack credentials');
-        } catch(e) {
-          errorMsg = e.message;
-          console.error('[POS] Supabase init failed:', e);
+          this.creds = JSON.parse(localStorage.getItem('farmhack-supabase-v1')) || null;
+        } catch(e) { this.creds = null; }
+        
+        if (!this.creds || !this.creds.url || !this.creds.anonKey) {
+          this.error = 'No credentials. Configure in FarmHack Admin.';
+          return false;
         }
-      } else if (!creds || !creds.url) {
-        errorMsg = 'No credentials. Configure in FarmHack Admin.';
-      } else {
-        errorMsg = 'Supabase library not loaded';
-      }
+        
+        if (typeof supabase === 'undefined') {
+          this.error = 'Supabase library not loaded';
+          return false;
+        }
+        
+        try {
+          this.client = supabase.createClient(this.creds.url, this.creds.anonKey);
+          this.connected = true;
+          this.error = null;
+          console.log('[POS] Supabase connected');
+          return true;
+        } catch(e) {
+          this.error = e.message;
+          return false;
+        }
+      },
       
-      return {
-        client: sb,
-        connected: connected,
-        tablesExist: tablesExist,
-        error: errorMsg,
-        creds: creds,
-        
-        checkTables: async function() {
-          if (!sb) return false;
-          try {
-            var result = await sb.from('pos_products').select('id').limit(1);
-            this.tablesExist = !result.error;
-            if (result.error) this.error = 'POS tables not found. Run schema in Admin.';
-            return this.tablesExist;
-          } catch(e) { this.tablesExist = false; this.error = e.message; return false; }
-        },
-        
-        fetchProducts: async function() {
-          if (!sb) return null;
-          try {
-            var result = await sb.from('pos_products').select('*').eq('is_active', true);
-            return result.error ? null : result.data;
-          } catch(e) { return null; }
-        },
-        
-        fetchVendors: async function() {
-          if (!sb) return null;
-          try {
-            var result = await sb.from('pos_vendors').select('*').eq('is_active', true);
-            return result.error ? null : result.data;
-          } catch(e) { return null; }
-        },
-        
-        saveTransaction: async function(tx, items) {
-          if (!sb) return { success: false, error: 'Not connected' };
-          try {
-            var txResult = await sb.from('pos_transactions').insert(tx).select().single();
-            if (txResult.error) throw txResult.error;
-            var itemsWithId = items.map(function(i) { return { ...i, transaction_id: txResult.data.id }; });
-            var itemsResult = await sb.from('pos_transaction_items').insert(itemsWithId);
-            if (itemsResult.error) throw itemsResult.error;
-            return { success: true, data: txResult.data };
-          } catch(e) { return { success: false, error: e.message }; }
-        },
-        
-        saveProduct: async function(product) {
-          if (!sb) return { success: false };
-          try {
-            var data = {
-              id: product.id || 'p_' + Date.now(),
-              name: product.name,
-              price: parseFloat(product.price),
-              unit: product.unit,
-              unit_type: product.unitType,
-              stock: parseInt(product.stock) || 0,
-              min_stock: parseInt(product.minStock) || 5,
-              barcode: product.barcode || null,
-              image_url: product.image || null,
-              vendor_id: product.vendorId,
-              category_id: product.category,
-              is_active: true
-            };
-            var result = await sb.from('pos_products').upsert(data).select().single();
-            return { success: !result.error, data: result.data, error: result.error?.message };
-          } catch(e) { return { success: false, error: e.message }; }
-        },
-        
-        saveVendor: async function(vendor) {
-          if (!sb) return { success: false };
-          try {
-            var data = {
-              id: vendor.id || vendor.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
-              name: vendor.name,
-              vendor_type: vendor.type,
-              commission_rate: parseFloat(vendor.commissionRate) || 0,
-              contact_email: vendor.contact || null,
-              payment_method: vendor.paymentMethod || 'check',
-              payment_terms: vendor.paymentTerms || 'net-15',
-              color: vendor.color || '#666666',
-              is_active: vendor.active !== false
-            };
-            var result = await sb.from('pos_vendors').upsert(data).select().single();
-            return { success: !result.error, data: result.data, error: result.error?.message };
-          } catch(e) { return { success: false, error: e.message }; }
-        },
-        
-        deleteProduct: async function(id) {
-          if (!sb) return false;
-          try {
-            var result = await sb.from('pos_products').update({ is_active: false }).eq('id', id);
-            return !result.error;
-          } catch(e) { return false; }
-      };
-    })();
+      checkTables: async function() {
+        if (!this.client && !this.init()) return false;
+        try {
+          var r = await this.client.from('pos_products').select('id').limit(1);
+          this.tablesExist = !r.error;
+          if (r.error) this.error = 'POS tables not found';
+          else this.error = null;
+          return this.tablesExist;
+        } catch(e) { this.tablesExist = false; this.error = e.message; return false; }
+      },
+      
+      fetchProducts: async function() {
+        if (!this.client) return null;
+        try {
+          var r = await this.client.from('pos_products').select('*').eq('is_active', true);
+          return r.error ? null : r.data;
+        } catch(e) { return null; }
+      },
+      
+      fetchVendors: async function() {
+        if (!this.client) return null;
+        try {
+          var r = await this.client.from('pos_vendors').select('*').eq('is_active', true);
+          return r.error ? null : r.data;
+        } catch(e) { return null; }
+      },
+      
+      saveTransaction: async function(tx, items) {
+        if (!this.client) return { success: false, error: 'Not connected' };
+        try {
+          var txR = await this.client.from('pos_transactions').insert(tx).select().single();
+          if (txR.error) throw txR.error;
+          var itemsData = items.map(function(i) { 
+            var copy = {}; for (var k in i) copy[k] = i[k];
+            copy.transaction_id = txR.data.id;
+            return copy;
+          });
+          var itemsR = await this.client.from('pos_transaction_items').insert(itemsData);
+          if (itemsR.error) throw itemsR.error;
+          return { success: true, data: txR.data };
+        } catch(e) { return { success: false, error: e.message }; }
+      },
+      
+      saveProduct: async function(p) {
+        if (!this.client) return { success: false };
+        try {
+          var d = {
+            id: p.id || 'p_' + Date.now(),
+            name: p.name, price: parseFloat(p.price), unit: p.unit,
+            unit_type: p.unitType, stock: parseInt(p.stock) || 0,
+            min_stock: parseInt(p.minStock) || 5, barcode: p.barcode || null,
+            image_url: p.image || null, vendor_id: p.vendorId,
+            category_id: p.category, is_active: true
+          };
+          var r = await this.client.from('pos_products').upsert(d).select().single();
+          return { success: !r.error, data: r.data };
+        } catch(e) { return { success: false, error: e.message }; }
+      },
+      
+      saveVendor: async function(v) {
+        if (!this.client) return { success: false };
+        try {
+          var d = {
+            id: v.id || v.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+            name: v.name, vendor_type: v.type,
+            commission_rate: parseFloat(v.commissionRate) || 0,
+            contact_email: v.contact || null,
+            payment_method: v.paymentMethod || 'check',
+            payment_terms: v.paymentTerms || 'net-15',
+            color: v.color || '#666666', is_active: v.active !== false
+          };
+          var r = await this.client.from('pos_vendors').upsert(d).select().single();
+          return { success: !r.error, data: r.data };
+        } catch(e) { return { success: false, error: e.message }; }
+      },
+      
+      deleteProduct: async function(id) {
+        if (!this.client) return false;
+        try {
+          var r = await this.client.from('pos_products').update({ is_active: false }).eq('id', id);
+          return !r.error;
+        } catch(e) { return false; }
+      }
+    };
   </script>
   
   <style>
@@ -154,10 +152,10 @@
     ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
     ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
     .loading { display: flex; align-items: center; justify-content: center; height: 100vh; font-size: 18px; color: #666; }
-    .db-status { position: fixed; top: 8px; right: 140px; font-size: 11px; padding: 4px 10px; border-radius: 12px; z-index: 100; display: flex; align-items: center; gap: 6px; cursor: help; }
+    .db-status { position: fixed; top: 8px; right: 140px; font-size: 11px; padding: 4px 10px; border-radius: 12px; z-index: 100; cursor: help; }
     .db-status.connected { background: #dcfce7; color: #166534; }
     .db-status.partial { background: #fef3c7; color: #92400e; }
-    .db-status.demo { background: #fef2f2; color: #b91c1c; }
+    .db-status.demo { background: #fee2e2; color: #b91c1c; }
   </style>
 </head>
 <body>
@@ -459,24 +457,21 @@
       const [testingDb, setTestingDb] = useState(false);
       const [testingFarmos, setTestingFarmos] = useState(false);
       
-      // Database status state
-      const [dbStatus, setDbStatus] = useState({
-        connected: window.SUPABASE_POS?.connected || false,
-        tablesExist: false,
-        error: window.SUPABASE_POS?.error || null,
-        loading: true
-      });
+      // Database status
+      const [dbStatus, setDbStatus] = useState({ connected: false, tablesExist: false, error: null, loading: true });
       
-      // Check database connection and load data on mount
+      // Initialize Supabase on mount (after library is loaded)
       useEffect(() => {
-        async function initDatabase() {
+        async function initDb() {
           const sb = window.SUPABASE_POS;
-          if (sb && sb.connected) {
+          sb.init(); // Safe to call - library is loaded by now
+          
+          if (sb.connected) {
             const hasTable = await sb.checkTables();
             setDbStatus({ connected: true, tablesExist: hasTable, error: sb.error, loading: false });
             
             if (hasTable) {
-              // Load products from Supabase
+              // Load products
               const sbProducts = await sb.fetchProducts();
               if (sbProducts && sbProducts.length > 0) {
                 const grouped = {};
@@ -491,10 +486,9 @@
                 });
                 setProducts(grouped);
                 Object.assign(PRODUCTS, grouped);
-                console.log('[POS] Loaded', sbProducts.length, 'products from Supabase');
               }
               
-              // Load vendors from Supabase
+              // Load vendors
               const sbVendors = await sb.fetchVendors();
               if (sbVendors && sbVendors.length > 0) {
                 const vendorMap = {};
@@ -508,14 +502,13 @@
                 });
                 setVendors(vendorMap);
                 Object.assign(VENDORS, vendorMap);
-                console.log('[POS] Loaded', sbVendors.length, 'vendors from Supabase');
               }
             }
           } else {
-            setDbStatus({ connected: false, tablesExist: false, error: sb?.error || 'Not configured', loading: false });
+            setDbStatus({ connected: false, tablesExist: false, error: sb.error, loading: false });
           }
         }
-        initDatabase();
+        initDb();
       }, []);
       
       // Sync localSettings when settings change
@@ -625,43 +618,29 @@
         const selectedUnitType = UNIT_TYPES.find(u => u.id === form.unitType);
         const handleSave = async () => {
           setSaving(true);
-          const data = { ...form, price: parseFloat(form.price), stock: parseInt(form.stock) || 0, id: product?.id || `${form.category[0]}${Date.now()}`, image: form.image || 'https://images.unsplash.com/photo-1518843875459-f738682238a6?w=300&h=300&fit=crop' };
+          const data = { ...form, id: product?.id || `${form.category[0]}${Date.now()}`, price: parseFloat(form.price), stock: parseInt(form.stock) || 0, image: form.image || 'https://images.unsplash.com/photo-1518843875459-f738682238a6?w=300&h=300&fit=crop' };
           
           // Save to Supabase if connected
           if (dbStatus.connected && dbStatus.tablesExist) {
-            const result = await window.SUPABASE_POS.saveProduct(data);
-            if (result.success) console.log('[POS] Product saved to Supabase');
-            else console.error('[POS] Supabase save failed:', result.error);
+            await window.SUPABASE_POS.saveProduct(data);
           }
           
-          // Update local state
-          if (product?.id) {
-            for (const cat of Object.keys(PRODUCTS)) {
-              const idx = PRODUCTS[cat].findIndex(p => p.id === product.id);
-              if (idx >= 0) { PRODUCTS[cat][idx] = { ...PRODUCTS[cat][idx], ...data }; break; }
-            }
-          } else {
-            if (!PRODUCTS[data.category]) PRODUCTS[data.category] = [];
-            PRODUCTS[data.category].push(data);
-          }
-          setProducts({ ...PRODUCTS });
-          setSaving(false);
-          onClose();
+          // Update local
+          if (product?.id) { for (const cat of Object.keys(PRODUCTS)) { const idx = PRODUCTS[cat].findIndex(p => p.id === product.id); if (idx >= 0) { PRODUCTS[cat][idx] = { ...PRODUCTS[cat][idx], ...data }; break; } } }
+          else { if (!PRODUCTS[data.category]) PRODUCTS[data.category] = []; PRODUCTS[data.category].push(data); }
+          setProducts({ ...PRODUCTS }); setSaving(false); onClose();
         };
         const handleDelete = async () => {
           if (confirm('Delete this product?')) {
-            if (dbStatus.connected && dbStatus.tablesExist) {
-              await window.SUPABASE_POS.deleteProduct(product.id);
-            }
+            if (dbStatus.connected && dbStatus.tablesExist) await window.SUPABASE_POS.deleteProduct(product.id);
             for (const cat of Object.keys(PRODUCTS)) PRODUCTS[cat] = PRODUCTS[cat].filter(p => p.id !== product.id);
-            setProducts({ ...PRODUCTS });
-            onClose();
+            setProducts({ ...PRODUCTS }); onClose();
           }
         };
         return (
           <div style={styles.modal} onClick={onClose}><div style={styles.modalContent} onClick={e => e.stopPropagation()}>
             <h2 style={{ margin: '0 0 20px', fontSize: '18px' }}>{product?.id ? '✏️ Edit Product' : '➕ New Product'}</h2>
-            {dbStatus.connected && dbStatus.tablesExist && <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '8px', fontSize: '11px', marginBottom: '12px' }}>✓ Will sync to Supabase</div>}
+            {dbStatus.connected && dbStatus.tablesExist && <div style={{ background: '#dcfce7', padding: '8px 12px', borderRadius: '8px', fontSize: '11px', color: '#166534', marginBottom: '12px' }}>✓ Will sync to Supabase</div>}
             <div style={{ display: 'grid', gap: '12px' }}>
               <div style={{ background: '#f0fdf4', padding: '12px', borderRadius: '8px' }}><label style={{ fontSize: '12px', fontWeight: '600', color: '#0f6e56' }}>Vendor</label><select style={{ ...styles.input, marginTop: '6px' }} value={form.vendorId} onChange={e => setForm({ ...form, vendorId: e.target.value })}>{Object.values(vendors).map(v => <option key={v.id} value={v.id}>{v.name} ({v.commissionRate}%)</option>)}</select></div>
               <input style={styles.input} placeholder="Product name *" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
@@ -683,23 +662,17 @@
           const id = vendor?.id || form.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
           const data = { ...form, id };
           
-          // Save to Supabase if connected
           if (dbStatus.connected && dbStatus.tablesExist) {
-            const result = await window.SUPABASE_POS.saveVendor(data);
-            if (result.success) console.log('[POS] Vendor saved to Supabase');
-            else console.error('[POS] Supabase vendor save failed:', result.error);
+            await window.SUPABASE_POS.saveVendor(data);
           }
           
-          // Update local state
           VENDORS[id] = data;
-          setVendors({ ...VENDORS });
-          setSaving(false);
-          onClose();
+          setVendors({ ...VENDORS }); setSaving(false); onClose();
         };
         return (
           <div style={styles.modal} onClick={onClose}><div style={styles.modalContent} onClick={e => e.stopPropagation()}>
             <h2 style={{ margin: '0 0 20px', fontSize: '18px' }}>{vendor?.id ? '✏️ Edit Vendor' : '➕ New Vendor'}</h2>
-            {dbStatus.connected && dbStatus.tablesExist && <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '8px', fontSize: '11px', marginBottom: '12px' }}>✓ Will sync to Supabase</div>}
+            {dbStatus.connected && dbStatus.tablesExist && <div style={{ background: '#dcfce7', padding: '8px 12px', borderRadius: '8px', fontSize: '11px', color: '#166534', marginBottom: '12px' }}>✓ Will sync to Supabase</div>}
             <div style={{ display: 'grid', gap: '12px' }}>
               <input style={styles.input} placeholder="Vendor name *" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666' }}>Type</label><select style={styles.input} value={form.type} onChange={e => setForm({ ...form, type: e.target.value, commissionRate: e.target.value === 'owner' ? 0 : form.commissionRate })}><option value="owner">Farm Store</option><option value="consignment">Consignment</option></select></div><div><label style={{ fontSize: '11px', color: '#666' }}>Commission %</label><input style={styles.input} type="number" value={form.commissionRate} onChange={e => setForm({ ...form, commissionRate: parseFloat(e.target.value) || 0 })} disabled={form.type === 'owner'} /></div></div>
@@ -718,49 +691,33 @@
         const completeSale = async (method) => {
           setProcessing(true);
           
-          // Build transaction data
-          const txNum = `TX${Date.now()}`;
-          const transaction = {
-            transaction_num: txNum,
-            subtotal: cartTotal,
-            tax_amount: 0,
-            total: cartTotal,
-            payment_method: method,
-            status: 'completed',
-            cashier_id: user.id,
-            is_kiosk: view === 'kiosk'
-          };
-          
-          const items = cart.map(item => ({
-            product_id: item.id,
-            vendor_id: item.vendorId,
-            quantity: item.quantity,
-            unit_price: item.price,
-            line_total: item.total,
-            commission_rate: item.commissionRate,
-            commission_amt: item.total * (item.commissionRate / 100),
-            is_weight: item.isWeight
-          }));
-          
           // Save to Supabase if connected
           if (dbStatus.connected && dbStatus.tablesExist) {
-            const result = await window.SUPABASE_POS.saveTransaction(transaction, items);
-            if (result.success) console.log('[POS] Transaction saved to Supabase:', result.data?.id);
-            else console.error('[POS] Transaction save failed:', result.error);
+            const tx = {
+              transaction_num: `TX${Date.now()}`,
+              subtotal: cartTotal, tax_amount: 0, total: cartTotal,
+              payment_method: method, status: 'completed',
+              cashier_id: user.id, is_kiosk: view === 'kiosk'
+            };
+            const items = cart.map(item => ({
+              product_id: item.id, vendor_id: item.vendorId,
+              quantity: item.quantity, unit_price: item.price,
+              line_total: item.total, commission_rate: item.commissionRate,
+              commission_amt: item.total * (item.commissionRate / 100),
+              is_weight: item.isWeight
+            }));
+            await window.SUPABASE_POS.saveTransaction(tx, items);
           }
           
-          // Update local state
-          TRANSACTIONS.push({ id: txNum, date: new Date().toISOString(), items: cart.map(item => ({ productId: item.id, name: item.name, vendorId: item.vendorId, quantity: item.quantity, price: item.price, total: item.total })), paymentMethod: method, total: cartTotal, cashier: user.name });
+          // Update local
+          TRANSACTIONS.push({ id: `txn_${Date.now()}`, date: new Date().toISOString(), items: cart.map(item => ({ productId: item.id, name: item.name, vendorId: item.vendorId, quantity: item.quantity, price: item.price, total: item.total })), paymentMethod: method, total: cartTotal, cashier: user.name });
           for (const item of cart) { for (const cat of Object.keys(PRODUCTS)) { const idx = PRODUCTS[cat].findIndex(p => p.id === item.id); if (idx >= 0) { PRODUCTS[cat][idx].stock = Math.max(0, PRODUCTS[cat][idx].stock - (item.isWeight ? 1 : item.quantity)); break; } } }
-          setProducts({ ...PRODUCTS });
-          setCart([]);
-          setProcessing(false);
-          setShowPayment(false);
+          setProducts({ ...PRODUCTS }); setCart([]); setProcessing(false); setShowPayment(false);
         };
         return (
           <div style={styles.modal} onClick={() => !processing && setShowPayment(false)}><div style={{ ...styles.modalContent, maxWidth: '450px' }} onClick={e => e.stopPropagation()}>
             <h2 style={{ margin: '0 0 16px', fontSize: '18px' }}>💳 Complete Sale</h2>
-            {dbStatus.connected && dbStatus.tablesExist && <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '8px', fontSize: '11px', marginBottom: '12px' }}>✓ Transaction will sync to Supabase</div>}
+            {dbStatus.connected && dbStatus.tablesExist && <div style={{ background: '#dcfce7', padding: '8px 12px', borderRadius: '8px', fontSize: '11px', color: '#166534', marginBottom: '12px' }}>✓ Transaction will sync to Supabase</div>}
             <div style={{ marginBottom: '16px' }}>{Object.entries(cartByVendor).map(([vendorId, data]) => (<div key={vendorId} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', marginBottom: '4px', background: '#f8f7f4', borderRadius: '6px', borderLeft: `3px solid ${data.vendor?.color || '#666'}` }}><span style={{ fontSize: '12px' }}>{data.vendor?.name}</span><span style={{ fontWeight: '600', fontSize: '13px' }}>${data.subtotal.toFixed(2)}</span></div>))}</div>
             <div style={{ fontSize: '28px', fontWeight: '700', color: '#0f6e56', textAlign: 'center', marginBottom: '20px', padding: '16px', background: '#f0fdf4', borderRadius: '10px' }}>${cartTotal.toFixed(2)}</div>
             <div style={{ display: 'grid', gap: '8px', marginBottom: '16px' }}><button style={{ ...styles.button, ...styles.primaryBtn, padding: '14px' }} onClick={() => completeSale('card')} disabled={processing}>{processing ? 'Processing...' : '💳 Card'}</button><button style={{ ...styles.button, ...styles.secondaryBtn, padding: '14px' }} onClick={() => completeSale('cash')} disabled={processing}>💵 Cash</button></div>
@@ -861,7 +818,7 @@
 
             {adminSection === 'payments' && (<div style={styles.card}><h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>💳 Payment Processing</h3><div style={{ display: 'grid', gap: '12px' }}><div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Select Payment Processor</div><div style={{ display: 'grid', gap: '8px' }}>{PAYMENT_PROCESSORS.map(proc => (<div key={proc.id} onClick={() => setLocalSettings({ ...localSettings, paymentProcessor: proc.id })} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px', borderRadius: '10px', border: localSettings.paymentProcessor === proc.id ? '2px solid #0f6e56' : '2px solid #e0ddd5', cursor: 'pointer', background: localSettings.paymentProcessor === proc.id ? '#f0fdf4' : 'white' }}><div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><span style={{ fontSize: '24px' }}>{proc.logo}</span><div><div style={{ fontWeight: '600', fontSize: '14px' }}>{proc.name} {proc.recommended && <span style={{ color: '#0f6e56', fontSize: '12px' }}>★ Recommended</span>}</div><div style={{ fontSize: '11px', color: '#666' }}>{proc.features}</div></div></div><div style={{ textAlign: 'right' }}><div style={{ fontWeight: '700', color: '#0f6e56' }}>{proc.rate}</div><div style={{ fontSize: '10px', color: '#888' }}>per transaction</div></div></div>))}</div><div style={{ borderTop: '1px solid #eee', paddingTop: '12px', marginTop: '4px' }}><h4 style={{ margin: '0 0 10px', fontSize: '13px' }}>API Configuration</h4><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>API Key / Secret Key</label><input style={styles.input} type="password" placeholder={`${localSettings.paymentProcessor} API key`} value={localSettings.paymentApiKey} onChange={e => setLocalSettings({ ...localSettings, paymentApiKey: e.target.value })} /></div><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', marginTop: '10px' }}><input type="checkbox" checked={localSettings.paymentTestMode} onChange={e => setLocalSettings({ ...localSettings, paymentTestMode: e.target.checked })} /> Test Mode (no real charges)</label></div><div style={{ background: '#f0f9ff', padding: '12px', borderRadius: '8px', fontSize: '11px', color: '#0369a1' }}><strong>💡 Recommended for Self-Service:</strong> Stripe Terminal M2 ($59) - tap/chip/swipe, Bluetooth, best API for unattended payments.</div><button style={{ ...styles.button, ...styles.primaryBtn, marginTop: '8px' }} onClick={saveAdminSettings} disabled={adminSaving}>{adminSaving ? 'Saving...' : '💾 Save Payment Settings'}</button></div></div>)}
 
-            {adminSection === 'database' && (<div style={styles.card}><h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>🗄️ Database Connection</h3><div style={{ display: 'grid', gap: '12px' }}><div style={{ padding: '16px', borderRadius: '8px', background: dbStatus.connected && dbStatus.tablesExist ? '#dcfce7' : dbStatus.connected ? '#fef3c7' : '#fef2f2' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', fontSize: '14px', color: dbStatus.connected && dbStatus.tablesExist ? '#166534' : dbStatus.connected ? '#92400e' : '#b91c1c' }}>{dbStatus.loading ? '⏳ Checking...' : dbStatus.connected && dbStatus.tablesExist ? '✓ Connected to Supabase' : dbStatus.connected ? '⚠️ Supabase Connected (No POS Tables)' : '✗ Not Connected'}</div>{dbStatus.error && <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>{dbStatus.error}</div>}{dbStatus.connected && !dbStatus.tablesExist && (<div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Run POS schema in FarmHack Admin → POS → Copy SQL</div>)}</div><button style={{ ...styles.button, ...styles.secondaryBtn }} onClick={async () => { setTestingDb(true); const sb = window.SUPABASE_POS; if (sb && sb.connected) { const ok = await sb.checkTables(); setDbStatus({ connected: true, tablesExist: ok, error: sb.error, loading: false }); } else { setDbStatus({ connected: false, tablesExist: false, error: sb?.error || 'Not configured', loading: false }); } setTestingDb(false); }} disabled={testingDb}>{testingDb ? 'Testing...' : 'Test Connection'}</button></div></div><div style={{ background: '#f8f7f4', padding: '14px', borderRadius: '8px' }}><div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px' }}>Supabase Credentials</div><div style={{ fontSize: '11px', color: '#666' }}>{window.SUPABASE_POS?.creds?.url ? (<><div><strong>URL:</strong> {window.SUPABASE_POS.creds.url}</div><div><strong>Key:</strong> {window.SUPABASE_POS.creds.anonKey?.substring(0, 25)}...</div><div style={{ marginTop: '8px', color: '#0f6e56' }}>✓ Credentials loaded from FarmHack Admin</div></>) : (<><div>No credentials found.</div><div style={{ marginTop: '8px' }}><a href="farmhack-admin.html" target="_blank" style={{ color: '#0f6e56', fontWeight: '600' }}>→ Configure in FarmHack Admin</a></div></>)}</div></div><div style={{ background: '#f0f9ff', padding: '12px', borderRadius: '8px', fontSize: '11px', color: '#0369a1' }}><strong>💡 How it works:</strong> POS automatically uses Supabase credentials from FarmHack Admin. Configure once, use everywhere.</div></div></div>)}
+            {adminSection === 'database' && (<div style={styles.card}><h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>🗄️ Database Configuration</h3><div style={{ display: 'grid', gap: '12px' }}><div style={{ padding: '12px', borderRadius: '8px', background: localSettings.dbConnected ? '#dcfce7' : '#fef2f2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: localSettings.dbConnected ? '#166534' : '#b91c1c' }}>{localSettings.dbConnected ? '✓ Connected' : '✗ Disconnected'}</div>{localSettings.dbLastSync && <div style={{ fontSize: '10px', color: '#666' }}>Last sync: {new Date(localSettings.dbLastSync).toLocaleString()}</div>}</div><button style={{ ...styles.button, ...(localSettings.dbConnected ? styles.secondaryBtn : styles.primaryBtn) }} onClick={testDbConnection} disabled={testingDb}>{testingDb ? 'Testing...' : 'Test Connection'}</button></div><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Database Type</label><select style={styles.input} value={localSettings.dbType} onChange={e => setLocalSettings({ ...localSettings, dbType: e.target.value })}><option value="postgresql">PostgreSQL</option><option value="sqlite">SQLite (Local)</option><option value="odoo">Odoo Backend</option></select></div>{localSettings.dbType !== 'sqlite' && (<><div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Host</label><input style={styles.input} value={localSettings.dbHost} onChange={e => setLocalSettings({ ...localSettings, dbHost: e.target.value })} /></div><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Port</label><input style={styles.input} type="number" value={localSettings.dbPort} onChange={e => setLocalSettings({ ...localSettings, dbPort: parseInt(e.target.value) })} /></div></div><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Database Name</label><input style={styles.input} value={localSettings.dbName} onChange={e => setLocalSettings({ ...localSettings, dbName: e.target.value })} /></div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Username</label><input style={styles.input} value={localSettings.dbUser} onChange={e => setLocalSettings({ ...localSettings, dbUser: e.target.value })} /></div><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Password</label><input style={styles.input} type="password" value={localSettings.dbPassword} onChange={e => setLocalSettings({ ...localSettings, dbPassword: e.target.value })} /></div></div></>)}<div style={{ background: '#f0f9ff', padding: '12px', borderRadius: '8px', fontSize: '11px', color: '#0369a1' }}><strong>💡 Raspberry Pi 5:</strong> PostgreSQL pre-installed. Default: localhost:5432, database: farm_pos</div><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={saveAdminSettings} disabled={adminSaving}>{adminSaving ? 'Saving...' : '💾 Save Database Settings'}</button></div></div>)}
 
             {adminSection === 'farmos' && (<div style={styles.card}><h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>🌱 farmOS Integration</h3><div style={{ display: 'grid', gap: '12px' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8f7f4', borderRadius: '8px' }}><div><span style={{ fontWeight: '600' }}>Enable farmOS Sync</span><div style={{ fontSize: '11px', color: '#666' }}>Sync harvests, sales, and inventory</div></div><button style={{ ...styles.toggle, background: localSettings.farmosEnabled ? '#0f6e56' : '#ccc' }} onClick={() => setLocalSettings({ ...localSettings, farmosEnabled: !localSettings.farmosEnabled })}><div style={{ ...styles.toggleKnob, left: localSettings.farmosEnabled ? '23px' : '3px' }} /></button></div>{localSettings.farmosEnabled && (<><div style={{ padding: '12px', borderRadius: '8px', background: localSettings.farmosStatus === 'connected' ? '#dcfce7' : '#fef3c7', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: localSettings.farmosStatus === 'connected' ? '#166534' : '#92400e' }}>{localSettings.farmosStatus === 'connected' ? '✓ Connected' : '○ Not connected'}</div>{localSettings.farmosLastSync && <div style={{ fontSize: '10px', color: '#666' }}>Last sync: {new Date(localSettings.farmosLastSync).toLocaleString()}</div>}</div><button style={{ ...styles.button, ...styles.secondaryBtn }} onClick={testFarmosConnection} disabled={testingFarmos}>{testingFarmos ? 'Testing...' : 'Test Connection'}</button></div><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>farmOS Server URL</label><input style={styles.input} value={localSettings.farmosUrl} onChange={e => setLocalSettings({ ...localSettings, farmosUrl: e.target.value })} placeholder="https://your-farm.farmos.net" /></div><div style={{ background: '#f8f7f4', padding: '12px', borderRadius: '8px' }}><div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '10px' }}>OAuth 2.0 Credentials</div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '10px', color: '#666' }}>Client ID</label><input style={{ ...styles.input, padding: '8px' }} value={localSettings.farmosClientId} onChange={e => setLocalSettings({ ...localSettings, farmosClientId: e.target.value })} /></div><div><label style={{ fontSize: '10px', color: '#666' }}>Client Secret</label><input style={{ ...styles.input, padding: '8px' }} type="password" value={localSettings.farmosClientSecret} onChange={e => setLocalSettings({ ...localSettings, farmosClientSecret: e.target.value })} /></div></div></div><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><label style={{ fontSize: '12px' }}>Sync Interval:</label><select style={{ ...styles.input, width: '150px' }} value={localSettings.farmosSyncInterval} onChange={e => setLocalSettings({ ...localSettings, farmosSyncInterval: parseInt(e.target.value) })}><option value={5}>Every 5 minutes</option><option value={15}>Every 15 minutes</option><option value={30}>Every 30 minutes</option><option value={60}>Every hour</option></select></div><div style={{ background: '#f0fdf4', padding: '12px', borderRadius: '8px' }}><div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px', color: '#0f6e56' }}>Sync Options</div><div style={{ display: 'grid', gap: '6px' }}><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}><input type="checkbox" checked={localSettings.farmosSyncHarvests} onChange={e => setLocalSettings({ ...localSettings, farmosSyncHarvests: e.target.checked })} /> Harvest logs → Inventory</label><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}><input type="checkbox" checked={localSettings.farmosSyncSales} onChange={e => setLocalSettings({ ...localSettings, farmosSyncSales: e.target.checked })} /> Sales → farmOS observations</label><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}><input type="checkbox" checked={localSettings.farmosSyncInventory} onChange={e => setLocalSettings({ ...localSettings, farmosSyncInventory: e.target.checked })} /> Import farmOS assets as products</label></div></div></>)}<button style={{ ...styles.button, ...styles.primaryBtn }} onClick={saveAdminSettings} disabled={adminSaving}>{adminSaving ? 'Saving...' : '💾 Save farmOS Settings'}</button></div></div>)}
           </div>
@@ -874,13 +831,12 @@
       );
 
       // MAIN RENDER
-      const dbStatusClass = dbStatus.connected && dbStatus.tablesExist ? 'connected' : dbStatus.connected ? 'partial' : 'demo';
-      const dbStatusText = dbStatus.loading ? '⏳ Checking...' : dbStatus.connected && dbStatus.tablesExist ? '🟢 Supabase' : dbStatus.connected ? '🟡 No Tables' : '🟠 Demo';
-      const dbStatusTitle = dbStatus.error || (dbStatus.connected && dbStatus.tablesExist ? 'Connected to Supabase' : dbStatus.connected ? 'Run POS schema in Admin' : 'Configure Supabase in FarmHack Admin');
+      const dbClass = dbStatus.connected && dbStatus.tablesExist ? 'connected' : dbStatus.connected ? 'partial' : 'demo';
+      const dbText = dbStatus.loading ? '⏳' : dbStatus.connected && dbStatus.tablesExist ? '🟢 Supabase' : dbStatus.connected ? '🟡 No Tables' : '🟠 Demo';
       
       return (
         <div style={styles.app}>
-          <div className={`db-status ${dbStatusClass}`} title={dbStatusTitle}>{dbStatusText}</div>
+          <div className={`db-status ${dbClass}`} title={dbStatus.error || (dbStatus.connected ? 'Connected' : 'Demo mode')}>{dbText}</div>
           <header style={styles.header}><div style={styles.logo}><span style={{ fontSize: '22px' }}>🌱</span><div><div>{settings.storeName.split(' ').slice(0, 3).join(' ')}</div><div style={{ fontSize: '9px', opacity: 0.8, fontWeight: '400' }}>{user.role.charAt(0).toUpperCase() + user.role.slice(1)}: {user.name}</div></div></div><div style={styles.tabs}>{availableViews.map(tab => (<button key={tab.id} style={{ ...styles.tab, ...(view === tab.id ? styles.tabActive : styles.tabInactive) }} onClick={() => setView(tab.id)}>{tab.label}</button>))}</div><button style={{ ...styles.button, background: 'rgba(255,255,255,0.15)', color: 'white', fontSize: '11px' }} onClick={logout}>Logout</button></header>
           {view === 'pos' && renderPOS()}
           {view === 'kiosk' && renderKiosk()}
