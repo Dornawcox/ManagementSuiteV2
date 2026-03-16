@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Farm POS v7.1</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Farm POS v7.4</title>
   <meta name="description" content="Cooperative Farm Store POS with multi-vendor consignment, role-based access, and peripheral device management">
   
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
@@ -16,7 +19,21 @@
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
   
   <script>
-    console.log('[POS] === VERSION 7.1 LOADING ===');
+    console.log('[POS] === VERSION 7.4 LOADING ===');
+    
+    // Check for URL parameters to set Supabase credentials
+    (function() {
+      const params = new URLSearchParams(window.location.search);
+      const sbUrl = params.get('sb_url');
+      const sbKey = params.get('sb_key');
+      if (sbUrl && sbKey) {
+        console.log('[POS] Found Supabase credentials in URL parameters');
+        localStorage.setItem('farmhack-supabase-v1', JSON.stringify({ url: sbUrl, anonKey: sbKey }));
+        // Remove params from URL to keep it clean (optional)
+        // window.history.replaceState({}, '', window.location.pathname);
+      }
+    })();
+    
     // ============================================
     // SUPABASE LAZY CONNECTOR
     // Does NOT connect on script load - call init() from React useEffect
@@ -144,6 +161,47 @@
           console.log('[POS] Fetched settings:', Object.keys(settings));
           return settings;
         } catch(e) { console.error('[POS] fetchSettings exception:', e); return null; }
+      },
+      
+      fetchTransactions: async function() {
+        if (!this.client) return [];
+        try {
+          // Fetch transactions with their items
+          var txR = await this.client.from('pos_transactions').select('*').order('created_at', { ascending: false }).limit(100);
+          if (txR.error) { console.error('[POS] fetchTransactions error:', txR.error); return []; }
+          
+          var transactions = [];
+          for (var i = 0; i < (txR.data || []).length; i++) {
+            var tx = txR.data[i];
+            // Fetch items for this transaction
+            var itemsR = await this.client.from('pos_transaction_items').select('*').eq('transaction_id', tx.id);
+            var items = (itemsR.data || []).map(function(item) {
+              return {
+                productId: item.product_id,
+                vendorId: item.vendor_id,
+                quantity: parseFloat(item.quantity),
+                price: parseFloat(item.unit_price),
+                total: parseFloat(item.line_total),
+                commissionRate: parseFloat(item.commission_rate),
+                commissionAmt: parseFloat(item.commission_amt)
+              };
+            });
+            transactions.push({
+              id: tx.id,
+              transactionNum: tx.transaction_num,
+              date: tx.created_at,
+              items: items,
+              subtotal: parseFloat(tx.subtotal),
+              tax: parseFloat(tx.tax_amount),
+              total: parseFloat(tx.total),
+              paymentMethod: tx.payment_method,
+              cashier: tx.cashier_id,
+              status: tx.status
+            });
+          }
+          console.log('[POS] Fetched transactions:', transactions.length);
+          return transactions;
+        } catch(e) { console.error('[POS] fetchTransactions exception:', e); return []; }
       },
       
       saveSettings: async function(s) {
@@ -276,6 +334,64 @@
           console.log('[POS] Product deleted:', id);
           return true;
         } catch(e) { console.error('[POS] deleteProduct exception:', e); return false; }
+      },
+      
+      // Seed demo data to Supabase
+      seedDemoData: async function() {
+        if (!this.client) return { success: false, error: 'Not connected' };
+        console.log('[POS] Seeding demo data...');
+        
+        try {
+          // Demo vendors
+          var vendors = [
+            { id: 'tuckaway-farm', name: 'Tuckaway Farm', vendor_type: 'owner', commission_rate: 0, color: '#16a34a', contact_email: 'farm@tuckaway.com', is_active: true },
+            { id: 'sunshine-eggs', name: 'Sunshine Eggs', vendor_type: 'consignment', commission_rate: 15, color: '#eab308', contact_email: 'eggs@sunshine.com', is_active: true },
+            { id: 'valley-dairy', name: 'Valley Dairy', vendor_type: 'consignment', commission_rate: 12, color: '#3b82f6', contact_email: 'info@valleydairy.com', is_active: true },
+            { id: 'wildwood-preserves', name: 'Wildwood Preserves', vendor_type: 'consignment', commission_rate: 20, color: '#dc2626', contact_email: 'jams@wildwood.com', is_active: true },
+            { id: 'green-meadow-meats', name: 'Green Meadow Meats', vendor_type: 'consignment', commission_rate: 18, color: '#7c3aed', contact_email: 'orders@greenmeadow.com', is_active: true }
+          ];
+          
+          for (var i = 0; i < vendors.length; i++) {
+            await this.client.from('pos_vendors').upsert(vendors[i], { onConflict: 'id' });
+          }
+          console.log('[POS] Vendors seeded:', vendors.length);
+          
+          // Demo products
+          var products = [
+            { id: 'p_tomatoes', name: 'Heirloom Tomatoes', price: 4.99, unit: 'lb', unit_type: 'weight', stock: 50, category_id: 'vegetables', vendor_id: 'tuckaway-farm', barcode: 'VEG-10001', image_url: 'https://images.unsplash.com/photo-1546470427-227c7369a9b9?w=300&h=300&fit=crop' },
+            { id: 'p_lettuce', name: 'Butterhead Lettuce', price: 3.50, unit: 'head', unit_type: 'each', stock: 30, category_id: 'vegetables', vendor_id: 'tuckaway-farm', barcode: 'VEG-10002', image_url: 'https://images.unsplash.com/photo-1622206151226-18ca2c9ab4a1?w=300&h=300&fit=crop' },
+            { id: 'p_carrots', name: 'Rainbow Carrots', price: 3.99, unit: 'bunch', unit_type: 'bunch', stock: 40, category_id: 'vegetables', vendor_id: 'tuckaway-farm', barcode: 'VEG-10003', image_url: 'https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=300&h=300&fit=crop' },
+            { id: 'p_kale', name: 'Tuscan Kale', price: 4.50, unit: 'bunch', unit_type: 'bunch', stock: 25, category_id: 'vegetables', vendor_id: 'tuckaway-farm', barcode: 'VEG-10004', image_url: 'https://images.unsplash.com/photo-1524179091875-bf99a9a6af57?w=300&h=300&fit=crop' },
+            { id: 'p_apples', name: 'Honeycrisp Apples', price: 3.99, unit: 'lb', unit_type: 'weight', stock: 100, category_id: 'fruit', vendor_id: 'tuckaway-farm', barcode: 'FRU-20001', image_url: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=300&h=300&fit=crop' },
+            { id: 'p_peaches', name: 'Georgia Peaches', price: 4.99, unit: 'lb', unit_type: 'weight', stock: 60, category_id: 'fruit', vendor_id: 'tuckaway-farm', barcode: 'FRU-20002', image_url: 'https://images.unsplash.com/photo-1595124442225-71e5bdf82930?w=300&h=300&fit=crop' },
+            { id: 'p_eggs_dozen', name: 'Farm Fresh Eggs (Dozen)', price: 6.99, unit: 'dozen', unit_type: 'dozen', stock: 40, category_id: 'eggs', vendor_id: 'sunshine-eggs', barcode: 'EGG-30001', image_url: 'https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=300&h=300&fit=crop' },
+            { id: 'p_eggs_half', name: 'Farm Fresh Eggs (Half Dozen)', price: 3.99, unit: 'half-dozen', unit_type: 'half-dozen', stock: 30, category_id: 'eggs', vendor_id: 'sunshine-eggs', barcode: 'EGG-30002', image_url: 'https://images.unsplash.com/photo-1598965675045-45c5e72c7d05?w=300&h=300&fit=crop' },
+            { id: 'p_milk', name: 'Whole Milk (Gallon)', price: 7.99, unit: 'gallon', unit_type: 'gallon', stock: 20, category_id: 'dairy', vendor_id: 'valley-dairy', barcode: 'DAI-40001', image_url: 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=300&h=300&fit=crop' },
+            { id: 'p_cheese', name: 'Aged Cheddar', price: 8.99, unit: 'each', unit_type: 'each', stock: 15, category_id: 'dairy', vendor_id: 'valley-dairy', barcode: 'DAI-40002', image_url: 'https://images.unsplash.com/photo-1618164436241-4473940d1f5c?w=300&h=300&fit=crop' },
+            { id: 'p_butter', name: 'Cultured Butter', price: 6.50, unit: 'each', unit_type: 'each', stock: 25, category_id: 'dairy', vendor_id: 'valley-dairy', barcode: 'DAI-40003', image_url: 'https://images.unsplash.com/photo-1589985270826-4b7bb135bc9d?w=300&h=300&fit=crop' },
+            { id: 'p_bacon', name: 'Smoked Bacon', price: 12.99, unit: 'each', unit_type: 'each', stock: 20, category_id: 'meat', vendor_id: 'green-meadow-meats', barcode: 'MEA-50001', image_url: 'https://images.unsplash.com/photo-1606851091851-e8c8c0fca5ba?w=300&h=300&fit=crop' },
+            { id: 'p_sausage', name: 'Breakfast Sausage', price: 9.99, unit: 'each', unit_type: 'each', stock: 25, category_id: 'meat', vendor_id: 'green-meadow-meats', barcode: 'MEA-50002', image_url: 'https://images.unsplash.com/photo-1432139555190-58524dae6a55?w=300&h=300&fit=crop' },
+            { id: 'p_jam', name: 'Strawberry Jam', price: 7.99, unit: 'jar', unit_type: 'each', stock: 30, category_id: 'preserves', vendor_id: 'wildwood-preserves', barcode: 'PRE-60001', image_url: 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=300&h=300&fit=crop' },
+            { id: 'p_honey', name: 'Wildflower Honey', price: 12.99, unit: 'jar', unit_type: 'each', stock: 20, category_id: 'preserves', vendor_id: 'wildwood-preserves', barcode: 'PRE-60002', image_url: 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=300&h=300&fit=crop' },
+            { id: 'p_pickles', name: 'Dill Pickles', price: 6.99, unit: 'jar', unit_type: 'each', stock: 25, category_id: 'preserves', vendor_id: 'wildwood-preserves', barcode: 'PRE-60003', image_url: 'https://images.unsplash.com/photo-1595295546866-d8cd5a7c1b86?w=300&h=300&fit=crop' }
+          ];
+          
+          for (var j = 0; j < products.length; j++) {
+            products[j].is_active = true;
+            products[j].min_stock = 5;
+            await this.client.from('pos_products').upsert(products[j], { onConflict: 'id' });
+          }
+          console.log('[POS] Products seeded:', products.length);
+          
+          // Update settings
+          await this.client.from('pos_settings').upsert({ key: 'store', value: { name: 'Tuckaway Farm Store', address: '123 Farm Road, Valley View', phone: '(555) 123-4567', email: 'store@tuckaway.com' }}, { onConflict: 'key' });
+          console.log('[POS] Settings updated');
+          
+          return { success: true, vendors: vendors.length, products: products.length };
+        } catch(e) {
+          console.error('[POS] seedDemoData error:', e);
+          return { success: false, error: e.message };
+        }
       }
     };
   </script>
@@ -588,6 +704,7 @@
       const [showSettlement, setShowSettlement] = useState(false);
       const [adminSection, setAdminSection] = useState('store');
       const [showKioskCart, setShowKioskCart] = useState(false);
+      const [transactions, setTransactions] = useState([]);
       
       // Admin settings state (moved to component level to fix hooks violation)
       const [localSettings, setLocalSettings] = useState({ ...SETTINGS });
@@ -711,6 +828,16 @@
               setSettings(loadedSettings);
               setLocalSettings(loadedSettings);
               console.log('[POS] Settings loaded');
+            }
+            
+            // Load transactions from Supabase
+            console.log('[POS] Fetching transactions...');
+            const sbTransactions = await sb.fetchTransactions();
+            if (sbTransactions && sbTransactions.length > 0) {
+              TRANSACTIONS.length = 0; // Clear array
+              sbTransactions.forEach(tx => TRANSACTIONS.push(tx));
+              setTransactions([...sbTransactions]);
+              console.log('[POS] Transactions loaded:', sbTransactions.length);
             }
             
             console.log('[POS] Initialization complete!');
@@ -859,8 +986,16 @@
             setProducts({ ...PRODUCTS }); onClose();
           }
         };
+        
+        // Generate SKU from category + random
+        const generateSKU = () => {
+          const prefix = form.category.substring(0, 3).toUpperCase();
+          const num = Math.floor(Math.random() * 90000) + 10000;
+          setForm({ ...form, barcode: `${prefix}-${num}` });
+        };
+        
         return (
-          <div style={styles.modal} onClick={onClose}><div style={styles.modalContent} onClick={e => e.stopPropagation()}>
+          <div style={styles.modal} onClick={onClose}><div style={{ ...styles.modalContent, maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
             <h2 style={{ margin: '0 0 20px', fontSize: '18px' }}>{product?.id ? '✏️ Edit Product' : '➕ New Product'}</h2>
             {dbStatus.connected && dbStatus.tablesExist && <div style={{ background: '#dcfce7', padding: '8px 12px', borderRadius: '8px', fontSize: '11px', color: '#166534', marginBottom: '12px' }}>✓ Will sync to Supabase</div>}
             {saveError && <div style={{ background: '#fef2f2', padding: '8px 12px', borderRadius: '8px', fontSize: '11px', color: '#b91c1c', marginBottom: '12px' }}>❌ Error: {saveError}</div>}
@@ -870,7 +1005,8 @@
               <input style={styles.input} placeholder="Product name *" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666' }}>Category</label><select style={styles.input} value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>{CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}</select></div><div><label style={{ fontSize: '11px', color: '#666' }}>Price *</label><input style={styles.input} type="number" step="0.01" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} /></div><div><label style={{ fontSize: '11px', color: '#666' }}>Stock</label><input style={styles.input} type="number" value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} /></div></div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666' }}>Unit Type</label><select style={styles.input} value={form.unitType} onChange={e => { const ut = UNIT_TYPES.find(u => u.id === e.target.value); setForm({ ...form, unitType: e.target.value, unit: ut.units[0] }); }}>{UNIT_TYPES.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select></div><div><label style={{ fontSize: '11px', color: '#666' }}>Unit</label><select style={styles.input} value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })}>{selectedUnitType?.units.map(u => <option key={u} value={u}>{u}</option>)}</select></div></div>
-              <input style={styles.input} placeholder="Barcode" value={form.barcode} onChange={e => setForm({ ...form, barcode: e.target.value })} />
+              <div><label style={{ fontSize: '11px', color: '#666' }}>SKU / Barcode</label><div style={{ display: 'flex', gap: '8px' }}><input style={{ ...styles.input, flex: 1 }} placeholder="e.g., VEG-12345" value={form.barcode} onChange={e => setForm({ ...form, barcode: e.target.value })} /><button type="button" style={{ ...styles.button, ...styles.secondaryBtn, padding: '8px 12px', fontSize: '11px' }} onClick={generateSKU}>🎲 Generate</button></div></div>
+              <div><label style={{ fontSize: '11px', color: '#666' }}>Product Image URL</label><input style={styles.input} placeholder="https://example.com/image.jpg" value={form.image || ''} onChange={e => setForm({ ...form, image: e.target.value })} />{form.image && <div style={{ marginTop: '8px', textAlign: 'center' }}><img src={form.image} alt="Preview" style={{ maxWidth: '120px', maxHeight: '80px', borderRadius: '8px', objectFit: 'cover', border: '1px solid #ddd' }} onError={e => e.target.style.display = 'none'} /></div>}</div>
               <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>{product?.id && <button style={{ ...styles.button, ...styles.dangerBtn }} onClick={handleDelete}>Delete</button>}<button style={{ ...styles.button, ...styles.secondaryBtn, flex: 1 }} onClick={onClose}>Cancel</button><button style={{ ...styles.button, ...styles.primaryBtn, flex: 2 }} onClick={handleSave} disabled={!form.name || !form.price || saving}>{saving ? 'Saving...' : 'Save'}</button></div>
             </div>
           </div></div>
@@ -942,8 +1078,26 @@
             await window.SUPABASE_POS.saveTransaction(tx, items);
           }
           
-          // Update local
-          TRANSACTIONS.push({ id: `txn_${Date.now()}`, date: new Date().toISOString(), items: cart.map(item => ({ productId: item.id, name: item.name, vendorId: item.vendorId, quantity: item.quantity, price: item.price, total: item.total })), paymentMethod: method, total: cartTotal, cashier: user.name });
+          // Update local - create transaction object with proper structure
+          const newTx = { 
+            id: `txn_${Date.now()}`, 
+            date: new Date().toISOString(), 
+            items: cart.map(item => ({ 
+              productId: item.id, 
+              name: item.name, 
+              vendorId: item.vendorId, 
+              quantity: item.quantity, 
+              price: item.price, 
+              total: item.total,
+              commissionAmt: item.total * (item.commissionRate / 100)
+            })), 
+            paymentMethod: method, 
+            total: cartTotal, 
+            cashier: user.name 
+          };
+          TRANSACTIONS.push(newTx);
+          setTransactions(prev => [...prev, newTx]);
+          
           for (const item of cart) { for (const cat of Object.keys(PRODUCTS)) { const idx = PRODUCTS[cat].findIndex(p => p.id === item.id); if (idx >= 0) { PRODUCTS[cat][idx].stock = Math.max(0, PRODUCTS[cat][idx].stock - (item.isWeight ? 1 : item.quantity)); break; } } }
           setProducts({ ...PRODUCTS }); setCart([]); setProcessing(false); setShowPayment(false);
         };
@@ -1065,7 +1219,7 @@
 
             {adminSection === 'payments' && (<div style={styles.card}><h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>💳 Payment Processing</h3><div style={{ display: 'grid', gap: '12px' }}><div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Select Payment Processor</div><div style={{ display: 'grid', gap: '8px' }}>{PAYMENT_PROCESSORS.map(proc => (<div key={proc.id} onClick={() => setLocalSettings({ ...localSettings, paymentProcessor: proc.id })} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px', borderRadius: '10px', border: localSettings.paymentProcessor === proc.id ? '2px solid #0f6e56' : '2px solid #e0ddd5', cursor: 'pointer', background: localSettings.paymentProcessor === proc.id ? '#f0fdf4' : 'white' }}><div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><span style={{ fontSize: '24px' }}>{proc.logo}</span><div><div style={{ fontWeight: '600', fontSize: '14px' }}>{proc.name} {proc.recommended && <span style={{ color: '#0f6e56', fontSize: '12px' }}>★ Recommended</span>}</div><div style={{ fontSize: '11px', color: '#666' }}>{proc.features}</div></div></div><div style={{ textAlign: 'right' }}><div style={{ fontWeight: '700', color: '#0f6e56' }}>{proc.rate}</div><div style={{ fontSize: '10px', color: '#888' }}>per transaction</div></div></div>))}</div><div style={{ borderTop: '1px solid #eee', paddingTop: '12px', marginTop: '4px' }}><h4 style={{ margin: '0 0 10px', fontSize: '13px' }}>API Configuration</h4><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>API Key / Secret Key</label><input style={styles.input} type="password" placeholder={`${localSettings.paymentProcessor} API key`} value={localSettings.paymentApiKey} onChange={e => setLocalSettings({ ...localSettings, paymentApiKey: e.target.value })} /></div><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', marginTop: '10px' }}><input type="checkbox" checked={localSettings.paymentTestMode} onChange={e => setLocalSettings({ ...localSettings, paymentTestMode: e.target.checked })} /> Test Mode (no real charges)</label></div><div style={{ background: '#f0f9ff', padding: '12px', borderRadius: '8px', fontSize: '11px', color: '#0369a1' }}><strong>💡 Recommended for Self-Service:</strong> Stripe Terminal M2 ($59) - tap/chip/swipe, Bluetooth, best API for unattended payments.</div><button style={{ ...styles.button, ...styles.primaryBtn, marginTop: '8px' }} onClick={saveAdminSettings} disabled={adminSaving}>{adminSaving ? 'Saving...' : '💾 Save Payment Settings'}</button></div></div>)}
 
-            {adminSection === 'database' && (<div style={styles.card}><h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>🗄️ Database Configuration</h3><div style={{ display: 'grid', gap: '12px' }}><div style={{ padding: '12px', borderRadius: '8px', background: localSettings.dbConnected ? '#dcfce7' : '#fef2f2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: localSettings.dbConnected ? '#166534' : '#b91c1c' }}>{localSettings.dbConnected ? '✓ Connected' : '✗ Disconnected'}</div>{localSettings.dbLastSync && <div style={{ fontSize: '10px', color: '#666' }}>Last sync: {new Date(localSettings.dbLastSync).toLocaleString()}</div>}</div><button style={{ ...styles.button, ...(localSettings.dbConnected ? styles.secondaryBtn : styles.primaryBtn) }} onClick={testDbConnection} disabled={testingDb}>{testingDb ? 'Testing...' : 'Test Connection'}</button></div><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Database Type</label><select style={styles.input} value={localSettings.dbType} onChange={e => setLocalSettings({ ...localSettings, dbType: e.target.value })}><option value="postgresql">PostgreSQL</option><option value="sqlite">SQLite (Local)</option><option value="odoo">Odoo Backend</option></select></div>{localSettings.dbType !== 'sqlite' && (<><div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Host</label><input style={styles.input} value={localSettings.dbHost} onChange={e => setLocalSettings({ ...localSettings, dbHost: e.target.value })} /></div><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Port</label><input style={styles.input} type="number" value={localSettings.dbPort} onChange={e => setLocalSettings({ ...localSettings, dbPort: parseInt(e.target.value) })} /></div></div><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Database Name</label><input style={styles.input} value={localSettings.dbName} onChange={e => setLocalSettings({ ...localSettings, dbName: e.target.value })} /></div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Username</label><input style={styles.input} value={localSettings.dbUser} onChange={e => setLocalSettings({ ...localSettings, dbUser: e.target.value })} /></div><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Password</label><input style={styles.input} type="password" value={localSettings.dbPassword} onChange={e => setLocalSettings({ ...localSettings, dbPassword: e.target.value })} /></div></div></>)}<div style={{ background: '#f0f9ff', padding: '12px', borderRadius: '8px', fontSize: '11px', color: '#0369a1' }}><strong>💡 Raspberry Pi 5:</strong> PostgreSQL pre-installed. Default: localhost:5432, database: farm_pos</div><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={saveAdminSettings} disabled={adminSaving}>{adminSaving ? 'Saving...' : '💾 Save Database Settings'}</button></div></div>)}
+            {adminSection === 'database' && (<div style={styles.card}><h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>🗄️ Database Configuration</h3><div style={{ display: 'grid', gap: '12px' }}><div style={{ padding: '12px', borderRadius: '8px', background: dbStatus.connected && dbStatus.tablesExist ? '#dcfce7' : dbStatus.connected ? '#fef3c7' : '#fef2f2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: dbStatus.connected && dbStatus.tablesExist ? '#166534' : dbStatus.connected ? '#92400e' : '#b91c1c' }}>{dbStatus.connected && dbStatus.tablesExist ? '✓ Connected to Supabase' : dbStatus.connected ? '⚠️ Connected but tables missing' : '✗ Not connected'}</div><div style={{ fontSize: '10px', color: '#666' }}>{dbStatus.error || 'Using shared credentials from localStorage'}</div></div><button style={{ ...styles.button, ...(dbStatus.connected ? styles.secondaryBtn : styles.primaryBtn) }} onClick={testDbConnection} disabled={testingDb}>{testingDb ? 'Testing...' : 'Test Connection'}</button></div>{dbStatus.connected && dbStatus.tablesExist && (<><div style={{ padding: '12px', borderRadius: '8px', background: '#f0f9ff', border: '1px solid #bae6fd' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: '#0369a1' }}>🌱 Seed Demo Data</div><div style={{ fontSize: '11px', color: '#666' }}>Populate database with sample vendors and products</div></div><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={async () => { const btn = event.target; btn.disabled = true; btn.textContent = 'Seeding...'; const result = await window.SUPABASE_POS.seedDemoData(); if (result.success) { alert('Demo data seeded! ' + result.vendors + ' vendors, ' + result.products + ' products. Refresh to see changes.'); location.reload(); } else { alert('Error: ' + result.error); btn.disabled = false; btn.textContent = '🌱 Seed Data'; } }}>🌱 Seed Data</button></div></div><div style={{ padding: '12px', borderRadius: '8px', background: '#faf5ff', border: '1px solid #e9d5ff' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: '#7c3aed' }}>🔗 Share Access Link</div><div style={{ fontSize: '11px', color: '#666' }}>Generate a link for other devices/users</div></div><button style={{ ...styles.button, background: '#7c3aed', color: 'white' }} onClick={() => { const creds = JSON.parse(localStorage.getItem('farmhack-supabase-v1') || '{}'); if (creds.url && creds.anonKey) { const shareUrl = window.location.origin + window.location.pathname + '?sb_url=' + encodeURIComponent(creds.url) + '&sb_key=' + encodeURIComponent(creds.anonKey); navigator.clipboard.writeText(shareUrl).then(() => alert('Share link copied to clipboard!\\n\\nAnyone with this link will auto-connect to your Supabase database.')).catch(() => { prompt('Copy this link:', shareUrl); }); } else { alert('No Supabase credentials found. Configure in Admin Panel first.'); } }}>📋 Copy Link</button></div></div></>)}<div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>Database Type</label><select style={styles.input} value={localSettings.dbType} onChange={e => setLocalSettings({ ...localSettings, dbType: e.target.value })}><option value="supabase">Supabase (Cloud)</option><option value="postgresql">PostgreSQL (Local)</option><option value="sqlite">SQLite (Local)</option></select></div><div style={{ background: '#f0f9ff', padding: '12px', borderRadius: '8px', fontSize: '11px', color: '#0369a1' }}><strong>💡 Tip:</strong> Supabase credentials are shared across all FarmHack apps. Configure them in the Admin Panel.</div><button style={{ ...styles.button, ...styles.primaryBtn }} onClick={saveAdminSettings} disabled={adminSaving}>{adminSaving ? 'Saving...' : '💾 Save Database Settings'}</button></div></div>)}
 
             {adminSection === 'farmos' && (<div style={styles.card}><h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>🌱 farmOS Integration</h3><div style={{ display: 'grid', gap: '12px' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8f7f4', borderRadius: '8px' }}><div><span style={{ fontWeight: '600' }}>Enable farmOS Sync</span><div style={{ fontSize: '11px', color: '#666' }}>Sync harvests, sales, and inventory</div></div><button style={{ ...styles.toggle, background: localSettings.farmosEnabled ? '#0f6e56' : '#ccc' }} onClick={() => setLocalSettings({ ...localSettings, farmosEnabled: !localSettings.farmosEnabled })}><div style={{ ...styles.toggleKnob, left: localSettings.farmosEnabled ? '23px' : '3px' }} /></button></div>{localSettings.farmosEnabled && (<><div style={{ padding: '12px', borderRadius: '8px', background: localSettings.farmosStatus === 'connected' ? '#dcfce7' : '#fef3c7', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><div style={{ fontWeight: '600', color: localSettings.farmosStatus === 'connected' ? '#166534' : '#92400e' }}>{localSettings.farmosStatus === 'connected' ? '✓ Connected' : '○ Not connected'}</div>{localSettings.farmosLastSync && <div style={{ fontSize: '10px', color: '#666' }}>Last sync: {new Date(localSettings.farmosLastSync).toLocaleString()}</div>}</div><button style={{ ...styles.button, ...styles.secondaryBtn }} onClick={testFarmosConnection} disabled={testingFarmos}>{testingFarmos ? 'Testing...' : 'Test Connection'}</button></div><div><label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>farmOS Server URL</label><input style={styles.input} value={localSettings.farmosUrl} onChange={e => setLocalSettings({ ...localSettings, farmosUrl: e.target.value })} placeholder="https://your-farm.farmos.net" /></div><div style={{ background: '#f8f7f4', padding: '12px', borderRadius: '8px' }}><div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '10px' }}>OAuth 2.0 Credentials</div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}><div><label style={{ fontSize: '10px', color: '#666' }}>Client ID</label><input style={{ ...styles.input, padding: '8px' }} value={localSettings.farmosClientId} onChange={e => setLocalSettings({ ...localSettings, farmosClientId: e.target.value })} /></div><div><label style={{ fontSize: '10px', color: '#666' }}>Client Secret</label><input style={{ ...styles.input, padding: '8px' }} type="password" value={localSettings.farmosClientSecret} onChange={e => setLocalSettings({ ...localSettings, farmosClientSecret: e.target.value })} /></div></div></div><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><label style={{ fontSize: '12px' }}>Sync Interval:</label><select style={{ ...styles.input, width: '150px' }} value={localSettings.farmosSyncInterval} onChange={e => setLocalSettings({ ...localSettings, farmosSyncInterval: parseInt(e.target.value) })}><option value={5}>Every 5 minutes</option><option value={15}>Every 15 minutes</option><option value={30}>Every 30 minutes</option><option value={60}>Every hour</option></select></div><div style={{ background: '#f0fdf4', padding: '12px', borderRadius: '8px' }}><div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px', color: '#0f6e56' }}>Sync Options</div><div style={{ display: 'grid', gap: '6px' }}><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}><input type="checkbox" checked={localSettings.farmosSyncHarvests} onChange={e => setLocalSettings({ ...localSettings, farmosSyncHarvests: e.target.checked })} /> Harvest logs → Inventory</label><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}><input type="checkbox" checked={localSettings.farmosSyncSales} onChange={e => setLocalSettings({ ...localSettings, farmosSyncSales: e.target.checked })} /> Sales → farmOS observations</label><label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}><input type="checkbox" checked={localSettings.farmosSyncInventory} onChange={e => setLocalSettings({ ...localSettings, farmosSyncInventory: e.target.checked })} /> Import farmOS assets as products</label></div></div></>)}<button style={{ ...styles.button, ...styles.primaryBtn }} onClick={saveAdminSettings} disabled={adminSaving}>{adminSaving ? 'Saving...' : '💾 Save farmOS Settings'}</button></div></div>)}
           </div>
@@ -1073,9 +1227,60 @@
       };
 
       // SETTLEMENT MODAL
-      const SettlementModal = () => (
-        <div style={styles.modal} onClick={() => setShowSettlement(false)}><div style={{ ...styles.modalContent, maxWidth: '700px' }} onClick={e => e.stopPropagation()}><h2 style={{ margin: '0 0 16px', fontSize: '18px' }}>💰 Settlement Report</h2><div style={{ display: 'grid', gap: '10px' }}>{Object.values(vendors).filter(v => v.type === 'consignment').map(vendor => (<div key={vendor.id} style={{ padding: '14px', borderRadius: '10px', border: `2px solid ${vendor.color}` }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ width: '10px', height: '10px', borderRadius: '50%', background: vendor.color }} /><span style={{ fontWeight: '600' }}>{vendor.name}</span><span style={{ fontSize: '10px', color: '#888' }}>{vendor.commissionRate}%</span></div><button style={{ ...styles.button, ...styles.primaryBtn, padding: '4px 10px', fontSize: '10px' }}>Process</button></div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginTop: '10px', fontSize: '11px' }}><div><div style={{ color: '#888' }}>Gross</div><div style={{ fontWeight: '600' }}>$0.00</div></div><div><div style={{ color: '#888' }}>Commission</div><div style={{ fontWeight: '600', color: '#dc2626' }}>-$0.00</div></div><div><div style={{ color: '#888' }}>Net Payable</div><div style={{ fontWeight: '700', color: '#0f6e56' }}>$0.00</div></div></div></div>))}</div><button style={{ ...styles.button, ...styles.secondaryBtn, width: '100%', marginTop: '16px' }} onClick={() => setShowSettlement(false)}>Close</button></div></div>
-      );
+      const SettlementModal = () => {
+        // Calculate settlements from transactions state (loaded from Supabase)
+        const vendorTotals = {};
+        transactions.forEach(tx => {
+          (tx.items || []).forEach(item => {
+            if (!vendorTotals[item.vendorId]) {
+              vendorTotals[item.vendorId] = { gross: 0, items: 0, commission: 0 };
+            }
+            vendorTotals[item.vendorId].gross += item.total || 0;
+            vendorTotals[item.vendorId].items += 1;
+            vendorTotals[item.vendorId].commission += item.commissionAmt || 0;
+          });
+        });
+        
+        return (
+          <div style={styles.modal} onClick={() => setShowSettlement(false)}>
+            <div style={{ ...styles.modalContent, maxWidth: '700px' }} onClick={e => e.stopPropagation()}>
+              <h2 style={{ margin: '0 0 16px', fontSize: '18px' }}>💰 Vendor Settlement Report</h2>
+              <div style={{ fontSize: '11px', color: '#666', marginBottom: '12px' }}>Based on {transactions.length} transaction(s) from Supabase</div>
+              <div style={{ display: 'grid', gap: '10px' }}>
+                {Object.values(vendors).filter(v => v.type === 'consignment').map(vendor => {
+                  const totals = vendorTotals[vendor.id] || { gross: 0, items: 0, commission: 0 };
+                  // If commission not stored in transaction, calculate it
+                  const commission = totals.commission > 0 ? totals.commission : totals.gross * (vendor.commissionRate / 100);
+                  const netPayable = totals.gross - commission;
+                  
+                  return (
+                    <div key={vendor.id} style={{ padding: '14px', borderRadius: '10px', border: `2px solid ${vendor.color}`, background: totals.gross > 0 ? '#fafafa' : 'white' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: vendor.color }} />
+                          <span style={{ fontWeight: '600' }}>{vendor.name}</span>
+                          <span style={{ fontSize: '10px', color: '#888' }}>{vendor.commissionRate}% commission</span>
+                        </div>
+                        {totals.gross > 0 && <button style={{ ...styles.button, ...styles.primaryBtn, padding: '4px 10px', fontSize: '10px' }}>Mark Paid</button>}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '10px', fontSize: '11px' }}>
+                        <div><div style={{ color: '#888' }}>Items Sold</div><div style={{ fontWeight: '600' }}>{totals.items}</div></div>
+                        <div><div style={{ color: '#888' }}>Gross Sales</div><div style={{ fontWeight: '600' }}>${totals.gross.toFixed(2)}</div></div>
+                        <div><div style={{ color: '#888' }}>Commission</div><div style={{ fontWeight: '600', color: '#dc2626' }}>-${commission.toFixed(2)}</div></div>
+                        <div><div style={{ color: '#888' }}>Net Payable</div><div style={{ fontWeight: '700', color: '#0f6e56' }}>${netPayable.toFixed(2)}</div></div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {Object.values(vendors).filter(v => v.type === 'consignment').length === 0 && (
+                  <div style={{ padding: '20px', textAlign: 'center', color: '#888' }}>No consignment vendors found</div>
+                )}
+              </div>
+              <button style={{ ...styles.button, ...styles.secondaryBtn, width: '100%', marginTop: '16px' }} onClick={() => setShowSettlement(false)}>Close</button>
+            </div>
+          </div>
+        );
+      };
 
       // MAIN RENDER
       const dbClass = dbStatus.connected && dbStatus.tablesExist ? 'connected' : dbStatus.connected ? 'partial' : 'demo';
