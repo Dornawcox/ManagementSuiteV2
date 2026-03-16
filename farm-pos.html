@@ -34,10 +34,10 @@
       
       var creds = getCreds();
       
-      // Auto-initialize if credentials exist
-      if (creds && creds.url && creds.anonKey && window.supabase) {
+      // Auto-initialize if credentials exist (use supabase global, same as farmhack-admin)
+      if (creds && creds.url && creds.anonKey && typeof supabase !== 'undefined') {
         try {
-          sb = window.supabase.createClient(creds.url, creds.anonKey);
+          sb = supabase.createClient(creds.url, creds.anonKey);
           connected = true;
           console.log('[POS] Supabase connected from FarmHack credentials');
         } catch(e) {
@@ -46,6 +46,8 @@
         }
       } else if (!creds || !creds.url) {
         errorMsg = 'No credentials. Configure in FarmHack Admin.';
+      } else {
+        errorMsg = 'Supabase library not loaded';
       }
       
       return {
