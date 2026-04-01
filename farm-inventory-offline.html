@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0f6e56">
+  <title>Farm Inventory</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    :root{--green:#0f6e56;--green-light:#e6f4f0;--amber:#d97706;--red:#dc2626;--gray:#6b7280;--border:#e5e7eb;--bg:#f9fafb;--radius:12px;--shadow:0 2px 8px rgba(0,0,0,.10)}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:#111827;min-height:100vh;display:flex;flex-direction:column;font-size:16px;max-width:600px;margin:0 auto}
+    .hdr{background:var(--green);color:#fff;padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+    .hdr-title{font-size:18px;font-weight:700}.hdr-sub{font-size:11px;opacity:.8;margin-top:1px}
+    .hdr-count{background:rgba(255,255,255,.2);border-radius:20px;padding:4px 12px;font-size:13px;font-weight:700}
+    .tab-bar{display:flex;background:#fff;border-bottom:2px solid var(--border);position:sticky;top:64px;z-index:99;overflow-x:auto}
+    .tab-btn{flex:1;min-width:60px;padding:11px 4px;border:none;background:none;font-size:11px;font-weight:600;color:var(--gray);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;font-family:inherit;white-space:nowrap}
+    .tab-btn.active{color:var(--green);border-bottom-color:var(--green)}
+    .tab-badge{display:inline-block;background:var(--amber);color:#fff;border-radius:10px;font-size:10px;padding:1px 5px;margin-left:3px;font-weight:700}
+    .screen{display:none;flex:1;overflow-y:auto;padding-bottom:88px}.screen.active{display:block}
+    .card{background:#fff;border-radius:var(--radius);padding:16px;margin:12px 12px 0;box-shadow:var(--shadow)}
+    .card-title{font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:14px 20px;border-radius:10px;border:none;font-size:15px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit;min-height:50px}
+    .btn:active{transform:scale(.97)}.btn-w{width:100%}
+    .btn-primary{background:var(--green);color:#fff}.btn-primary:disabled{background:#9ca3af;cursor:not-allowed;transform:none}
+    .btn-secondary{background:var(--bg);color:#374151;border:1.5px solid var(--border)}
+    .btn-danger{background:#fef2f2;color:var(--red);border:1.5px solid #fecaca}
+    .btn-amber{background:#fffbeb;color:var(--amber);border:1.5px solid #fde68a}
+    .btn-sm{padding:8px 12px;font-size:13px;min-height:36px}
+    .btn-camera{background:var(--green);color:#fff;width:100%;height:100px;font-size:22px;border-radius:var(--radius);border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-family:inherit;font-weight:600;box-shadow:0 4px 12px rgba(15,110,86,.3)}
+    .btn-camera span{font-size:13px}.btn-camera:active{transform:scale(.98)}
+    .btn-scan{background:#4338ca;color:#fff;width:100%;height:80px;font-size:18px;border-radius:var(--radius);border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;font-family:inherit;font-weight:600}
+    .btn-scan span{font-size:12px}
+    .ig{margin-bottom:14px}.ig label{display:block;font-size:11px;font-weight:700;color:var(--gray);margin-bottom:5px;text-transform:uppercase;letter-spacing:.3px}
+    input[type=text],input[type=number],input[type=url],select{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:16px;font-family:inherit;background:#fff;color:#111827;appearance:none;-webkit-appearance:none;transition:border-color .15s}
+    input:focus,select:focus{outline:none;border-color:var(--green)}
+    input[type=number]{-moz-appearance:textfield}
+    .photo-preview{width:100%;max-height:200px;object-fit:cover;border-radius:10px;margin-bottom:12px;display:none;border:1.5px solid var(--border)}
+    .photo-preview.visible{display:block}
+    .mtabs{display:flex;gap:5px;margin-bottom:14px;flex-wrap:wrap}
+    .mtab{flex:1;min-width:70px;padding:9px 4px;border-radius:8px;border:1.5px solid var(--border);background:#fff;cursor:pointer;font-size:12px;font-weight:600;color:var(--gray);text-align:center;font-family:inherit;transition:all .15s}
+    .mtab.active{background:var(--green-light);border-color:var(--green);color:var(--green)}
+    .ci{display:flex;align-items:center;gap:12px;padding:12px;background:#fff;border-radius:10px;margin:8px 12px 0;box-shadow:var(--shadow)}
+    .ci-thumb{width:56px;height:56px;border-radius:8px;object-fit:cover;background:var(--bg);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:24px;border:1px solid var(--border);overflow:hidden}
+    .ci-thumb img{width:100%;height:100%;object-fit:cover}
+    .ci-info{flex:1;min-width:0}.ci-name{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ci-meta{font-size:12px;color:var(--gray);margin-top:2px;line-height:1.4}
+    .ci-del{background:#fef2f2;color:var(--red);border:none;border-radius:8px;width:36px;height:36px;font-size:15px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+    /* Barcode scanner overlay */
+    /* scanner elements injected dynamically into body by JS */
+    /* Sync */
+    .conn-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600}
+    .conn-dot{width:9px;height:9px;border-radius:50%}
+    .conn-ok{background:#dcfce7;color:#166534}.conn-ok .conn-dot{background:#22c55e}
+    .conn-off{background:#f1f5f9;color:var(--gray)}.conn-off .conn-dot{background:var(--gray)}
+    .conn-err{background:#fef2f2;color:var(--red)}.conn-err .conn-dot{background:var(--red)}
+    .sync-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px}
+    .sync-row:last-child{border-bottom:none}
+    .sbadge{padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
+    .sbadge-green{background:#dcfce7;color:#166534}.sbadge-amber{background:#fef3c7;color:#92400e}.sbadge-blue{background:#dbeafe;color:#1e40af}
+    .diff-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+    .diff-table th{background:#f8fafc;padding:8px;text-align:left;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;color:var(--gray)}
+    .diff-table td{padding:8px;border-bottom:1px solid var(--border);vertical-align:middle}
+    .diff-table tr:last-child td{border-bottom:none}
+    .diff-new{color:var(--green);font-weight:600}
+    .diff-thumb{width:36px;height:36px;border-radius:6px;object-fit:cover}
+    .step-box{background:var(--green-light);border-radius:10px;padding:14px;margin-bottom:10px;border-left:4px solid var(--green)}
+    .step-num{font-size:11px;font-weight:700;color:var(--green);margin-bottom:4px;text-transform:uppercase}
+    .step-text{font-size:14px;line-height:1.5}
+    .bottom-bar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:600px;background:#fff;border-top:1px solid var(--border);padding:10px 16px 20px;box-shadow:0 -4px 16px rgba(0,0,0,.08);z-index:98}
+    #toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;padding:10px 20px;border-radius:20px;font-size:14px;font-weight:500;z-index:999;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
+    #toast.show{opacity:1}
+    .divider{height:1px;background:var(--border);margin:12px 0}
+    .row{display:flex;gap:10px}.row>*{flex:1}
+    .mt-10{margin-top:10px}.mt-14{margin-top:14px}
+    .text-gray{color:var(--gray);font-size:13px}
+    .info-box{background:#eff6ff;border-radius:8px;padding:12px;font-size:13px;color:#1e40af;line-height:1.5;margin-top:10px}
+    .warn-box{background:#fffbeb;border-radius:8px;padding:12px;font-size:13px;color:#92400e;line-height:1.5;margin-top:10px}
+    .empty{padding:40px 24px;text-align:center;color:var(--gray)}
+    .empty-icon{font-size:44px;margin-bottom:10px}
+    .empty-sub{font-size:13px;line-height:1.5}
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+
+<!-- scan result panel created dynamically by showScanResult() -->
+
+<!-- Header -->
+<div class="hdr">
+  <div>
+    <div class="hdr-title">&#127807; Farm Inventory</div>
+    <div class="hdr-sub">Offline capture &middot; Sync when ready</div>
+  </div>
+  <div class="hdr-count" id="hdrCount">0 items</div>
+</div>
+
+<!-- Tab Bar -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="showScreen('capture')">&#128247; Capture</button>
+  <button class="tab-btn" onclick="showScreen('scan')">&#x1F4F7; Scan</button>
+  <button class="tab-btn" onclick="showScreen('review')" id="reviewTab">Review<span class="tab-badge" id="reviewBadge" style="display:none">0</span></button>
+  <button class="tab-btn" onclick="showScreen('sync')">&#x1F504; Sync</button>
+  <button class="tab-btn" onclick="showScreen('export')">&#128228; Export</button>
+</div>
+
+<!-- CAPTURE -->
+<div class="screen active" id="screen-capture">
+  <div class="card">
+    <div class="mtabs">
+      <button class="mtab active" id="mPhotoBtn" onclick="setMethod('photo')">&#128247; Photo</button>
+      <button class="mtab" id="mNameBtn" onclick="setMethod('name')">&#9999; Name</button>
+    </div>
+    <div id="mPhoto">
+      <button class="btn-camera" onclick="triggerCamera('main')">&#128247;<span>Tap to take photo</span></button>
+      <input type="file" id="camMain" accept="image/*" capture="environment" style="display:none" onchange="onPhoto(this,'main')">
+      <img id="previewMain" class="photo-preview" alt="">
+      <div class="mt-14">
+        <div class="ig"><label>Product Name *</label><input type="text" id="pName" placeholder="e.g. Cherry Tomatoes" list="prodSuggest" autocomplete="off"><datalist id="prodSuggest"></datalist></div>
+        <div class="row">
+          <div class="ig"><label>Barcode</label><input type="text" id="pBarcode" placeholder="Scan or type"></div>
+          <div class="ig"><label>Stock Count</label><input type="number" id="pStock" placeholder="0" min="0" step="1"></div>
+        </div>
+        <div class="row">
+          <div class="ig"><label>Price ($)</label><input type="number" id="pPrice" placeholder="0.00" min="0" step="0.01"></div>
+          <div class="ig"><label>Unit</label><input type="text" id="pUnit" placeholder="each / lb"></div>
+        </div>
+        <div class="ig"><label>Notes</label><input type="text" id="pNotes" placeholder="Optional"></div>
+        <button class="btn btn-primary btn-w" onclick="saveItemPhoto()">&#128190; Save Item</button>
+      </div>
+    </div>
+    <div id="mName" style="display:none">
+      <div class="ig"><label>Product Name *</label><input type="text" id="nName" placeholder="e.g. Eggs - Dozen" list="prodSuggest2" autocomplete="off"><datalist id="prodSuggest2"></datalist></div>
+      <div class="row">
+        <div class="ig"><label>Stock Count</label><input type="number" id="nStock" placeholder="0" min="0" step="1"></div>
+        <div class="ig"><label>Price ($)</label><input type="number" id="nPrice" placeholder="0.00" min="0" step="0.01"></div>
+      </div>
+      <div class="row">
+        <div class="ig"><label>Barcode</label><input type="text" id="nBarcode" placeholder="Optional"></div>
+        <div class="ig"><label>Unit</label><input type="text" id="nUnit" placeholder="each / lb"></div>
+      </div>
+      <button class="btn btn-secondary btn-w mt-10" onclick="triggerCamera('name')" style="margin-bottom:10px">&#128247; Add Photo (optional)</button>
+      <input type="file" id="camName" accept="image/*" capture="environment" style="display:none" onchange="onPhoto(this,'name')">
+      <img id="previewName" class="photo-preview" alt="">
+      <div class="ig"><label>Notes</label><input type="text" id="nNotes" placeholder="Optional"></div>
+      <button class="btn btn-primary btn-w" onclick="saveItemName()">&#128190; Save Item</button>
+    </div>
+  </div>
+  <div style="margin:14px 12px 6px;font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.5px">Recent</div>
+  <div id="recentList"><div class="empty"><div class="empty-icon">&#128230;</div><div class="empty-sub">Nothing yet. Take a photo to get started.</div></div></div>
+</div>
+
+<!-- SCAN -->
+<div class="screen" id="screen-scan">
+
+  <div class="card">
+    <div class="card-title">Barcode Scanner</div>
+    <div class="text-gray" style="margin-bottom:12px;font-size:13px">
+      Works on all phones. Tap Live Scanner for continuous scanning or Scan Photo for a single shot.
+    </div>
+
+    <!-- Live scanner — only works on HTTPS or localhost -->
+    <div id="liveScanBtn">
+      <button class="btn btn-primary btn-w" onclick="openLiveScanner()" style="margin-bottom:10px;font-size:17px;height:72px">
+        &#128247; Live Barcode Scanner
+      </button>
+    </div>
+    <div id="liveScanWarn" style="display:none;background:#fef3c7;border-radius:10px;padding:12px;margin-bottom:10px;font-size:13px;color:#92400e;border-left:4px solid var(--amber)">
+      &#128247; Live scanner requires HTTPS.<br>
+      Use <strong>Scan from Photo</strong> below, or
+      <a href="#" onclick="showHttpsInstructions()" style="color:#92400e;font-weight:700">set up HTTPS on the Pi</a>.
+    </div>
+
+    <!-- Photo scan - always works on HTTP or HTTPS -->
+    <label style="display:flex;align-items:center;justify-content:center;gap:10px;background:#7c3aed;color:#fff;border-radius:10px;height:72px;cursor:pointer;font-weight:700;font-size:17px;box-shadow:0 4px 12px rgba(124,58,237,.3)">
+      &#128248; Scan from Photo
+      <input type="file" accept="image/*" capture="environment" style="display:none" onchange="onScanPhoto(this)">
+    </label>
+    <div style="font-size:11px;color:var(--gray);text-align:center;margin-top:6px">Opens camera &middot; Works on all phones &middot; No HTTPS needed</div>
+
+    <div class="divider"></div>
+
+    <div class="ig">
+      <label>Or Enter Barcode Manually</label>
+      <div class="row">
+        <input type="text" id="manualBarcode" placeholder="Type barcode...">
+        <button class="btn btn-primary btn-sm" onclick="lookupBarcode()">Find</button>
+      </div>
+    </div>
+    <div id="barcodeResult" style="display:none"></div>
+  </div>
+
+  <!-- Live scanner container (hidden until opened) -->
+  <div id="liveScannerWrap" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:#000;z-index:500;flex-direction:column">
+    <div style="position:relative;flex:1">
+      <div id="qr-reader" style="width:100%;height:100%"></div>
+    </div>
+    <div style="background:#000;padding:16px;display:flex;gap:10px">
+      <button class="btn btn-secondary btn-sm" style="flex:1;color:#fff;border-color:rgba(255,255,255,.3)" onclick="closeLiveScanner()">&#10005; Close</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Inventory Count Mode</div>
+    <div class="text-gray" style="margin-bottom:12px">Walk the store, scan each product, enter the stock count.</div>
+    <button class="btn btn-primary btn-w" onclick="startCountSession()" id="startCountBtn">&#128203; Start Count Session</button>
+    <div id="countSession" style="display:none;margin-top:12px">
+      <div class="sync-row"><span style="font-weight:600;color:var(--green)">Count session active</span><span class="sbadge sbadge-green" id="countNum">0 counted</span></div>
+      <label class="btn btn-secondary btn-sm btn-w mt-10" style="cursor:pointer">&#128248; Scan Next Item
+        <input type="file" accept="image/*" capture="environment" style="display:none" onchange="onScanPhoto(this)">
+      </label>
+      <button class="btn btn-amber btn-sm btn-w mt-10" onclick="endCountSession()">&#10003; End Session</button>
+    </div>
+  </div>
+
+  <div style="margin:14px 12px 6px;font-size:11px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.5px">Recent Scans</div>
+  <div id="recentScans"><div class="empty" style="padding:20px"><div class="empty-sub">No scans yet this session.</div></div></div>
+
+</div>
+
+<!-- REVIEW -->
+<div class="screen" id="screen-review">
+  <div id="reviewList"><div class="empty"><div class="empty-icon">&#128203;</div><div style="font-size:16px;font-weight:600;margin-bottom:6px;color:#374151">No captures yet</div><div class="empty-sub">Go to Capture or Scan to start.</div></div></div>
+</div>
+
+<!-- SYNC -->
+<div class="screen" id="screen-sync">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="card-title" style="margin-bottom:0">POS Connection</div>
+      <div id="connBadge" class="conn-badge conn-off"><div class="conn-dot"></div>Offline</div>
+    </div>
+    <div class="mtabs" style="margin-bottom:14px">
+      <button class="mtab active" id="connWifiBtn" onclick="setConnMethod('wifi')">&#x1F4F6; WiFi</button>
+      <button class="mtab" id="connBtBtn" onclick="setConnMethod('bt')">&#x1F535; Bluetooth</button>
+    </div>
+    <div id="connWifi">
+      <div class="ig"><label>POS Server URL</label>
+        <div class="row"><input type="url" id="posUrl" placeholder="http://192.168.68.120:8080" oninput="savePosUrl(this.value)"><button class="btn btn-secondary btn-sm" onclick="testWifi()">Test</button></div>
+      </div>
+      <div id="wifiStatus" class="text-gray" style="font-size:12px;margin-bottom:10px"></div>
+      <button class="btn btn-primary btn-w" onclick="wifiSync()" id="wifiSyncBtn" disabled>&#x1F504; Sync Now via WiFi</button>
+      <div class="info-box mt-10">Connect phone to the same WiFi as the Pi, then tap Test to verify, then Sync to push all captures into the POS product list.</div>
+    </div>
+    <div id="connBt" style="display:none">
+      <div class="text-gray" style="margin-bottom:12px">Connect directly to the Pi without WiFi using Web Bluetooth. Requires a Bluetooth bridge running on the Pi.</div>
+      <button class="btn btn-amber btn-w" onclick="btScan()">&#x1F535; Scan for Pi Bluetooth</button>
+      <div id="btStatus" class="text-gray" style="font-size:12px;margin-top:8px"></div>
+      <div id="btConnected" style="display:none">
+        <div class="divider"></div>
+        <button class="btn btn-primary btn-w" onclick="btSync()">&#x1F535; Sync via Bluetooth</button>
+      </div>
+      <div class="warn-box mt-10">&#9888; Web Bluetooth requires Chrome or Edge. Not available in Firefox or Safari. Pi must be running the Bluetooth bridge: <code style="display:block;margin-top:6px;font-family:monospace;font-size:12px;background:rgba(146,64,14,.1);padding:6px;border-radius:4px">python3 ~/bt-bridge.py</code></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Pending Changes</div>
+    <div id="pendingSummary"><div class="text-gray">No items captured yet.</div></div>
+  </div>
+  <div class="card" id="diffCard" style="display:none">
+    <div class="card-title">Preview Changes</div>
+    <div style="overflow-x:auto"><table class="diff-table"><thead><tr><th>Product</th><th>Photo</th><th>Stock</th><th>Match</th></tr></thead><tbody id="diffBody"></tbody></table></div>
+    <button class="btn btn-primary btn-w mt-10" onclick="wifiSync()">&#10003; Apply to POS</button>
+  </div>
+  <div class="card" id="logCard" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div class="card-title" style="margin-bottom:0">Sync Log</div>
+      <button class="btn btn-secondary btn-sm" onclick="clearLog()">Clear</button>
+    </div>
+    <div id="syncLog" style="font-size:12px"></div>
+  </div>
+</div>
+
+<!-- EXPORT -->
+<div class="screen" id="screen-export">
+  <div class="card">
+    <div class="card-title">Export Summary</div>
+    <div style="background:var(--green-light);border-radius:10px;padding:14px;margin-bottom:14px;border:1.5px solid #86efac">
+      <div class="sync-row"><span>Total captured</span><span class="sbadge sbadge-blue" id="sumTotal">0</span></div>
+      <div class="sync-row"><span>With photos</span><span class="sbadge sbadge-green" id="sumPhotos">0</span></div>
+      <div class="sync-row"><span>With stock counts</span><span class="sbadge sbadge-amber" id="sumStock">0</span></div>
+    </div>
+    <button class="btn btn-primary btn-w" id="exportBtn" onclick="exportJSON()" disabled>&#128228; Download Inventory File (.json)</button>
+    <div class="info-box mt-10">Downloads a .json file with all captures and embedded photos. Import via POS Admin &rarr; Import &rarr; Inventory App.</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Load Product List (for Autocomplete)</div>
+    <div class="text-gray" style="margin-bottom:10px">Load a POS product export so names autocomplete while capturing.</div>
+    <label class="btn btn-secondary btn-w" style="cursor:pointer">&#128229; Load from POS Export (.json or .csv)<input type="file" accept=".json,.csv" style="display:none" onchange="loadProductList(this)"></label>
+    <div id="loadStatus" style="font-size:12px;color:var(--gray);margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Import Instructions</div>
+    <div class="step-box"><div class="step-num">Step 1 - Download</div><div class="step-text">Tap Download above. Saves <code>farm-inventory-DATE.json</code> to your phone.</div></div>
+    <div class="step-box"><div class="step-num">Step 2 - Transfer</div><div class="step-text">Options: WiFi Sync tab &bull; Email/AirDrop the file &bull; USB cable to Pi</div></div>
+    <div class="step-box"><div class="step-num">Step 3 - Import</div><div class="step-text">POS &rarr; Admin &rarr; Import &rarr; Inventory App &rarr; choose the .json file</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Clear All Captures</div>
+    <div class="text-gray" style="margin-bottom:10px">Export or sync first, then clear to start fresh.</div>
+    <button class="btn btn-danger btn-w" onclick="clearAll()">&#128465; Clear All Captures</button>
+  </div>
+</div>
+
+<!-- Bottom bar -->
+<div class="bottom-bar">
+  <button class="btn btn-primary btn-w" id="bottomBtn" onclick="bottomAction()">&#128247; Open Camera</button>
+</div>
+<div id="toast"></div>
+
+<script>
+var DB='FarmInventoryV2',DB_VER=1,STORE='items';
+var db=null,currentScreen='capture',currentMethod='photo';
+var photoMain=null,photoName=null,productCache=[];
+var scanStream=null,scanAnimFrame=null,scanMode='inventory';
+var scanFoundBarcode=null,scanFoundProduct=null;
+var countActive=false,countSessionNum=0,recentScans=[];
+var connMethod='wifi',btDevice=null,btChar=null;
+var POS_URL=localStorage.getItem('farmhack-pos-url')||'http://192.168.68.120:8080';
+var isOnline=false;
+var BT_SERVICE='6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+var BT_CHAR='6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+
+function initDB(cb){
+  var req=indexedDB.open(DB,DB_VER);
+  req.onupgradeneeded=function(e){e.target.result.createObjectStore(STORE,{keyPath:'id',autoIncrement:true})};
+  req.onsuccess=function(e){db=e.target.result;cb()};
+  req.onerror=function(){alert('Storage unavailable - try Chrome or Edge')};
+}
+function dbAdd(rec,cb){db.transaction(STORE,'readwrite').objectStore(STORE).add(rec).onsuccess=function(e){if(cb)cb(e.target.result)}}
+function dbGetAll(cb){db.transaction(STORE,'readonly').objectStore(STORE).getAll().onsuccess=function(e){cb(e.target.result||[])}}
+function dbDelete(id,cb){var tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(id);tx.oncomplete=function(){if(cb)cb()}}
+function dbClear(cb){var tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).clear();tx.oncomplete=function(){if(cb)cb()}}
+
+function triggerCamera(which){document.getElementById(which==='main'?'camMain':'camName').click()}
+function onPhoto(input,which){
+  var file=input.files&&input.files[0];if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    var img=new Image();
+    img.onload=function(){
+      var c=document.createElement('canvas');
+      var r=Math.min(900/img.width,900/img.height,1);
+      c.width=Math.round(img.width*r);c.height=Math.round(img.height*r);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      var data=c.toDataURL('image/jpeg',.80);
+      if(which==='main'){photoMain=data;showPreview('previewMain',data);var stem=file.name.replace(/\.[^.]+$/,'').replace(/[-_]/g,' ');var ni=document.getElementById('pName');if(!ni.value)ni.value=stem.charAt(0).toUpperCase()+stem.slice(1)}
+      else{photoName=data;showPreview('previewName',data)}
+    };img.src=ev.target.result;
+  };reader.readAsDataURL(file);input.value='';
+}
+function showPreview(id,src){var el=document.getElementById(id);el.src=src;el.classList.add('visible')}
+
+var barcodeDetector=null;
+var html5Scanner=null;
+
+function showHttpsInstructions(){
+  alert(
+    'To enable live scanning, serve the POS over HTTPS:\n\n' +
+    'Option 1 - Caddy (easiest):\n' +
+    '  sudo apt install caddy\n' +
+    '  caddy reverse-proxy --from :443 --to :8080\n' +
+    '  Then open https://192.168.68.120\n\n' +
+    'Option 2 - Tailscale HTTPS:\n' +
+    '  sudo tailscale cert\n' +
+    '  Opens https://your-pi.ts.net\n\n' +
+    'Option 3 - Chrome flag (phone only):\n' +
+    '  Open chrome://flags\n' +
+    '  Search: Insecure origins treated as secure\n' +
+    '  Add: http://192.168.68.120:8080\n' +
+    '  Relaunch Chrome'
+  );
+  return false;
+}
+
+function openLiveScanner(){
+  var wrap=document.getElementById('liveScannerWrap');
+  wrap.style.display='flex';
+  // Destroy previous instance if any
+  if(html5Scanner){
+    html5Scanner.clear().catch(function(){});
+    html5Scanner=null;
+    document.getElementById('qr-reader').innerHTML='';
+  }
+  html5Scanner=new Html5QrcodeScanner('qr-reader',{
+    fps:10,
+    qrbox:{width:250,height:150},
+    rememberLastUsedCamera:true,
+    showTorchButtonIfSupported:true,
+    aspectRatio:1.7,
+    defaultZoomValueIfSupported:2,
+    videoConstraints:{facingMode:{ideal:'environment'}}
+  },false);
+  html5Scanner.render(function(code){
+    // Success
+    closeLiveScanner();
+    onBarcodeDetected(code);
+  },function(err){
+    // scan errors are normal (frame without barcode) — ignore
+  });
+}
+
+function closeLiveScanner(){
+  if(html5Scanner){
+    html5Scanner.clear().catch(function(){});
+    html5Scanner=null;
+    document.getElementById('qr-reader').innerHTML='';
+  }
+  document.getElementById('liveScannerWrap').style.display='none';
+}
+
+// Handle photo taken for barcode scanning — uses html5-qrcode library
+function onScanPhoto(input){
+  var file=input.files&&input.files[0];
+  if(!file){return}
+  input.value='';
+  var scanner=new Html5Qrcode('__scan_temp__',{verbose:false});
+  // Create a temp div for the scanner instance (required by library)
+  var tmp=document.getElementById('__scan_temp__');
+  if(!tmp){tmp=document.createElement('div');tmp.id='__scan_temp__';tmp.style.display='none';document.body.appendChild(tmp);}
+  scanner.scanFile(file, true)
+    .then(function(code){
+      scanner.clear().catch(function(){});
+      onBarcodeDetected(code);
+    })
+    .catch(function(err){
+      scanner.clear().catch(function(){});
+      // Show photo with manual entry fallback
+      var reader=new FileReader();
+      reader.onload=function(ev){showScanManualFallback(ev.target.result,file)};
+      reader.readAsDataURL(file);
+    });
+}
+
+function showScanResult(barcode){
+  var match=productCache.find(function(p){return p.barcode===barcode});
+  scanFoundBarcode=barcode;
+  scanFoundProduct=match||null;
+  var panel=document.getElementById('scanResultPanel');
+  if(!panel){
+    panel=document.createElement('div');
+    panel.id='scanResultPanel';
+    panel.style.cssText='position:fixed;bottom:0;left:0;right:0;background:#fff;border-radius:20px 20px 0 0;padding:20px;z-index:9999;box-shadow:0 -4px 20px rgba(0,0,0,.4);max-height:80vh;overflow-y:auto';
+    document.body.appendChild(panel);
+  }
+  panel.innerHTML='<div style="font-size:18px;font-weight:700;margin-bottom:4px">'+(match?esc(match.name):'Unknown product')+'</div>'+
+    '<div style="font-size:13px;color:var(--gray);margin-bottom:14px">'+(match?('Stock: '+(match.stock||0)+' &middot; $'+parseFloat(match.price||0).toFixed(2)):'Barcode: '+esc(barcode)+' &middot; Will create new product')+'</div>'+
+    '<div class="ig" style="margin-bottom:10px"><label>Stock Count</label>'+
+    '<input type="number" id="scanStockInput2" placeholder="Enter count" min="0" step="1" value="'+(match?match.stock||'':'')+'" style="width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:16px;font-family:inherit"></div>'+
+    '<div class="row" style="gap:8px">'+
+    '<button class="btn btn-secondary btn-sm" onclick="closeScanResultPanel()" style="flex:1">&#8617; Scan Again</button>'+
+    '<button class="btn btn-primary btn-sm" onclick="saveScanResult()" style="flex:2">&#128190; Save</button>'+
+    '</div>';
+  panel.style.display='block';
+  if(countActive){document.getElementById('countNum').textContent=(++countSessionNum)+' counted';}
+  addRecentScan(barcode, match);
+}
+
+function closeScanResultPanel(){
+  var p=document.getElementById('scanResultPanel');
+  if(p)p.remove();
+}
+
+function saveScanResult(){
+  var stock=parseFloat(document.getElementById('scanStockInput2').value)||null;
+  dbAdd({
+    productName:scanFoundProduct?scanFoundProduct.name:('Product '+scanFoundBarcode),
+    barcode:scanFoundBarcode,
+    stockCount:stock,
+    price:scanFoundProduct?scanFoundProduct.price:null,
+    notes:scanMode==='count'?'Inventory count':null,
+    imageData:null,
+    capturedAt:new Date().toISOString()
+  },function(){
+    toast('Saved: '+(scanFoundProduct?scanFoundProduct.name:scanFoundBarcode));
+    closeScanResultPanel();
+    refresh();
+  });
+}
+
+function showScanManualFallback(dataUrl){
+  // BarcodeDetector unavailable or found nothing — show photo with manual entry
+  var panel=document.getElementById('scanResultPanel');
+  if(!panel){
+    panel=document.createElement('div');
+    panel.id='scanResultPanel';
+    panel.style.cssText='position:fixed;bottom:0;left:0;right:0;background:#fff;border-radius:20px 20px 0 0;padding:20px;z-index:9999;box-shadow:0 -4px 20px rgba(0,0,0,.4);max-height:80vh;overflow-y:auto';
+    document.body.appendChild(panel);
+  }
+  panel.innerHTML='<img src="'+dataUrl+'" style="width:100%;max-height:200px;object-fit:contain;border-radius:8px;margin-bottom:12px">'+
+    '<div style="font-size:14px;font-weight:600;margin-bottom:8px;color:var(--amber)">&#9888; No barcode detected &mdash; enter manually:</div>'+
+    '<div class="ig" style="margin-bottom:8px"><label>Barcode Number</label>'+
+    '<input type="text" id="fallbackBarcode" placeholder="Type the barcode number from photo" style="width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:16px;font-family:inherit" oninput="lookupFallbackBarcode(this.value)"></div>'+
+    '<div id="fallbackMatch" style="font-size:13px;color:var(--gray);margin-bottom:10px"></div>'+
+    '<div class="ig" style="margin-bottom:10px"><label>Stock Count</label>'+
+    '<input type="number" id="scanStockInput2" placeholder="Enter count" min="0" step="1" style="width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:9px;font-size:16px;font-family:inherit"></div>'+
+    '<div class="row" style="gap:8px">'+
+    '<button class="btn btn-secondary btn-sm" onclick="closeScanResultPanel()" style="flex:1">&#8617; Try Again</button>'+
+    '<button class="btn btn-primary btn-sm" onclick="saveFallbackResult()" style="flex:2">&#128190; Save</button>'+
+    '</div>';
+  panel.style.display='block';
+}
+
+function lookupFallbackBarcode(val){
+  var el=document.getElementById('fallbackMatch');
+  if(!el)return;
+  var match=productCache.find(function(p){return p.barcode===val.trim()});
+  el.textContent=match?('Found: '+match.name+' (Stock: '+match.stock+')'):(val.length>3?'Not in product list - will create new':'');
+  el.style.color=match?'var(--green)':'var(--gray)';
+}
+
+function saveFallbackResult(){
+  var bc=(document.getElementById('fallbackBarcode')||{}).value||'';
+  bc=bc.trim();
+  if(!bc){toast('Enter the barcode number');return}
+  var stock=parseFloat(document.getElementById('scanStockInput2').value)||null;
+  var match=productCache.find(function(p){return p.barcode===bc});
+  dbAdd({
+    productName:match?match.name:('Product '+bc),
+    barcode:bc,
+    stockCount:stock,
+    price:match?match.price:null,
+    notes:null,
+    imageData:null,
+    capturedAt:new Date().toISOString()
+  },function(){
+    toast('Saved: '+(match?match.name:bc));
+    closeScanResultPanel();
+    refresh();
+  });
+}
+
+
+function initBarcodeDetector(){
+  if('BarcodeDetector' in window){
+    barcodeDetector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code','data_matrix']});
+    return true;
+  }
+  // BarcodeDetector not available - use photo fallback
+  barcodeDetector=null;
+  return false;
+}
+
+// Detect barcode from an image element or data URL using BarcodeDetector
+function detectFromImage(imgSrc, cb){
+  if(!barcodeDetector){cb(null);return}
+  var img=new Image();
+  img.onload=function(){
+    barcodeDetector.detect(img)
+      .then(function(codes){cb(codes.length>0?codes[0].rawValue:null)})
+      .catch(function(){cb(null)});
+  };
+  img.src=imgSrc;
+}
+
+function onBarcodeDetected(barcode){
+  cancelAnimationFrame(scanAnimFrame);
+  addRecentScan(barcode, productCache.find(function(p){return p.barcode===barcode}));
+  if(countActive){document.getElementById('countNum').textContent=(++countSessionNum)+' counted';}
+  showScanResult(barcode);
+}
+
+
+function addRecentScan(barcode,match){recentScans.unshift({barcode:barcode,name:match?match.name:'Unknown',ts:new Date()});if(recentScans.length>8)recentScans.pop();renderRecentScans()}
+function renderRecentScans(){var el=document.getElementById('recentScans');if(!recentScans.length){el.innerHTML='<div class="empty" style="padding:16px"><div class="empty-sub">No scans yet.</div></div>';return}el.innerHTML=recentScans.map(function(s){return'<div class="ci"><div class="ci-thumb">&#128247;</div><div class="ci-info"><div class="ci-name">'+esc(s.name)+'</div><div class="ci-meta">'+esc(s.barcode)+' - '+s.ts.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</div></div></div>'}).join('')}
+
+function startCountSession(){countActive=true;countSessionNum=0;document.getElementById('startCountBtn').style.display='none';document.getElementById('countSession').style.display='block';document.getElementById('countNum').textContent='0 counted';openScanner('count')}
+function endCountSession(){countActive=false;document.getElementById('countSession').style.display='none';document.getElementById('startCountBtn').style.display='block';toast('Count session ended: '+countSessionNum+' items')}
+
+function lookupBarcode(){
+  var b=document.getElementById('manualBarcode').value.trim();if(!b){toast('Enter a barcode');return}
+  var match=productCache.find(function(p){return p.barcode===b});
+  var el=document.getElementById('barcodeResult');el.style.display='block';
+  if(match){
+    el.innerHTML='<div style="background:var(--green-light);border-radius:8px;padding:12px;margin-top:8px"><div style="font-weight:700;font-size:15px">'+esc(match.name)+'</div><div class="text-gray">Stock: '+(match.stock||0)+' - $'+parseFloat(match.price||0).toFixed(2)+'</div><div class="row mt-10"><input type="number" id="quickStock" placeholder="New stock count" min="0" style="flex:1"><button class="btn btn-primary btn-sm" onclick="saveQuickCount(\''+escAttr(String(match.id))+'\',\''+escAttr(match.name)+'\',\''+escAttr(b)+'\')">Save</button></div></div>';
+  } else {
+    el.innerHTML='<div style="background:#fef3c7;border-radius:8px;padding:12px;margin-top:8px"><div style="font-weight:600;color:var(--amber)">Not found in product list</div><div class="text-gray">Barcode: '+esc(b)+'</div><button class="btn btn-secondary btn-sm btn-w mt-10" onclick="prefillCapture(\''+escAttr(b)+'\')">+ Add as New Product</button></div>';
+  }
+}
+
+function saveQuickCount(productId,name,barcode){
+  var stock=parseFloat(document.getElementById('quickStock').value)||null;
+  if(stock===null){toast('Enter a stock count');return}
+  dbAdd({productName:name,barcode:barcode,stockCount:stock,price:null,notes:'Manual count',imageData:null,capturedAt:new Date().toISOString()},function(){toast('Saved count for '+name);document.getElementById('barcodeResult').style.display='none';document.getElementById('manualBarcode').value='';refresh()});
+}
+function prefillCapture(barcode){setMethod('name');showScreen('capture');document.getElementById('nBarcode').value=barcode;document.getElementById('nName').focus()}
+
+function saveItemPhoto(){
+  var name=document.getElementById('pName').value.trim();
+  if(!name){toast('Enter a product name');return}
+  if(!photoMain&&!document.getElementById('pStock').value){toast('Add a photo or stock count');return}
+  dbAdd({productName:name,barcode:document.getElementById('pBarcode').value.trim()||null,stockCount:parseFloat(document.getElementById('pStock').value)||null,price:parseFloat(document.getElementById('pPrice').value)||null,unit:document.getElementById('pUnit').value.trim()||null,notes:document.getElementById('pNotes').value.trim()||null,imageData:photoMain||null,capturedAt:new Date().toISOString()},function(){
+    toast('Saved!');photoMain=null;document.getElementById('previewMain').classList.remove('visible');
+    ['pName','pBarcode','pStock','pPrice','pUnit','pNotes'].forEach(function(id){document.getElementById(id).value=''});refresh()});
+}
+function saveItemName(){
+  var name=document.getElementById('nName').value.trim();
+  if(!name){toast('Enter a product name');return}
+  if(!photoName&&!document.getElementById('nStock').value){toast('Add a photo or stock count');return}
+  dbAdd({productName:name,barcode:document.getElementById('nBarcode').value.trim()||null,stockCount:parseFloat(document.getElementById('nStock').value)||null,price:parseFloat(document.getElementById('nPrice').value)||null,unit:document.getElementById('nUnit').value.trim()||null,notes:document.getElementById('nNotes').value.trim()||null,imageData:photoName||null,capturedAt:new Date().toISOString()},function(){
+    toast('Saved!');photoName=null;document.getElementById('previewName').classList.remove('visible');
+    ['nName','nBarcode','nStock','nPrice','nUnit','nNotes'].forEach(function(id){document.getElementById(id).value=''});refresh()});
+}
+
+function renderItem(r){
+  var thumb=r.imageData?'<img src="'+r.imageData+'">':(r.barcode?'&#128247;':'&#128230;');
+  var meta=[];
+  if(r.stockCount!==null&&r.stockCount!==undefined)meta.push('Stock: '+r.stockCount);
+  if(r.price)meta.push('$'+parseFloat(r.price).toFixed(2));
+  if(r.barcode)meta.push(r.barcode);if(r.notes)meta.push(r.notes);
+  meta.push(new Date(r.capturedAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}));
+  return '<div class="ci"><div class="ci-thumb">'+thumb+'</div><div class="ci-info"><div class="ci-name">'+esc(r.productName||'Unknown')+'</div><div class="ci-meta">'+meta.map(esc).join(' - ')+'</div></div><button class="ci-del" onclick="deleteItem('+r.id+')">&#10005;</button></div>';
+}
+
+function refreshRecent(){dbGetAll(function(all){var el=document.getElementById('recentList');var items=all.slice().reverse().slice(0,4);el.innerHTML=items.length?items.map(renderItem).join(''):'<div class="empty"><div class="empty-icon">&#128230;</div><div class="empty-sub">Nothing yet.</div></div>'})}
+function refreshReview(){dbGetAll(function(all){var el=document.getElementById('reviewList');el.innerHTML=all.length?all.slice().reverse().map(renderItem).join(''):'<div class="empty"><div class="empty-icon">&#128203;</div><div style="font-size:16px;font-weight:600;margin-bottom:6px;color:#374151">No captures yet</div></div>'})}
+function refreshBadge(){dbGetAll(function(all){var n=all.length;var b=document.getElementById('reviewBadge');b.textContent=n;b.style.display=n?'inline-block':'none';document.getElementById('hdrCount').textContent=n+(n===1?' item':' items');document.getElementById('exportBtn').disabled=!n})}
+function refreshExport(){dbGetAll(function(all){document.getElementById('sumTotal').textContent=all.length;document.getElementById('sumPhotos').textContent=all.filter(function(r){return r.imageData}).length;document.getElementById('sumStock').textContent=all.filter(function(r){return r.stockCount!==null&&r.stockCount!==undefined}).length})}
+function refreshPending(){dbGetAll(function(all){var el=document.getElementById('pendingSummary');if(!all.length){el.innerHTML='<div class="text-gray">No items captured yet.</div>';document.getElementById('diffCard').style.display='none';return}var photos=all.filter(function(r){return r.imageData}).length;var stocks=all.filter(function(r){return r.stockCount!==null&&r.stockCount!==undefined}).length;el.innerHTML='<div class="sync-row"><span>Total items</span><span class="sbadge sbadge-blue">'+all.length+'</span></div><div class="sync-row"><span>With photos</span><span class="sbadge sbadge-green">'+photos+'</span></div><div class="sync-row"><span>Stock updates</span><span class="sbadge sbadge-amber">'+stocks+'</span></div>';buildDiff(all)})}
+
+function buildDiff(all){var diffCard=document.getElementById('diffCard');var tbody=document.getElementById('diffBody');diffCard.style.display='block';var rows=all.map(function(r){var match=findMatch(r);var ml=match?'Match':'+ New';var mc=match?'sbadge-green':'sbadge-amber';var cs=match?(match.stock||0):'--';var ns=(r.stockCount!==null&&r.stockCount!==undefined)?r.stockCount:'--';var sh=(r.stockCount!==null&&r.stockCount!==undefined&&match)?cs+' &rarr; <span class="diff-new">'+ns+'</span>':String(ns);var ph=r.imageData?'<img src="'+r.imageData+'" class="diff-thumb">':'--';return'<tr><td style="font-weight:600">'+esc(r.productName||'Unknown')+'</td><td>'+ph+'</td><td>'+sh+'</td><td><span class="sbadge '+mc+'">'+ml+'</span></td></tr>'});tbody.innerHTML=rows.join('')}
+function findMatch(r){if(r.barcode)return productCache.find(function(p){return p.barcode===r.barcode});return productCache.find(function(p){return p.name.toLowerCase()===(r.productName||'').toLowerCase()})}
+function deleteItem(id){if(!confirm('Delete?'))return;dbDelete(id,function(){refresh()})}
+
+function refresh(){refreshRecent();refreshReview();refreshBadge();refreshExport();if(currentScreen==='sync')refreshPending()}
+
+function savePosUrl(v){POS_URL=v.trim();localStorage.setItem('farmhack-pos-url',POS_URL)}
+function testWifi(){
+  var s=document.getElementById('wifiStatus');s.textContent='Testing...';s.style.color='var(--gray)';
+  fetch(POS_URL,{method:'HEAD',cache:'no-store'}).then(function(){
+    isOnline=true;s.textContent='Connected';s.style.color='var(--green)';
+    document.getElementById('wifiSyncBtn').disabled=false;
+    setConnBadge('ok','Connected');loadProductCacheFromPOS();
+  }).catch(function(){
+    isOnline=false;s.textContent='Cannot reach: '+POS_URL;s.style.color='var(--red)';
+    document.getElementById('wifiSyncBtn').disabled=true;setConnBadge('err','Unreachable');
+  });
+}
+function loadProductCacheFromPOS(){
+  try{var raw=localStorage.getItem('farmhack-products-cache');if(raw){var p=JSON.parse(raw);productCache=p;buildSuggestions();toast('Loaded '+p.length+' products from POS')}}catch(e){}
+}
+function wifiSync(){
+  if(!isOnline){toast('Not connected - tap Test first');return}
+  dbGetAll(function(all){
+    if(!all.length){toast('Nothing to sync');return}
+    var raw=localStorage.getItem('farmhack-products-cache');
+    var products=raw?JSON.parse(raw):[];
+    var updated=0,created=0;
+    all.forEach(function(r){
+      var match=findMatch(r);
+      if(match){if(r.imageData)match.image=r.imageData;if(r.stockCount!==null&&r.stockCount!==undefined)match.stock=r.stockCount;if(r.price)match.price=r.price;updated++}
+      else{products.push({id:'prod_inv_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),name:r.productName||'New Product',price:r.price||0,category:'produce',vendorId:products.length?products[0].vendorId:'farm-store',stock:r.stockCount||0,unit:r.unit||'each',unitType:r.unit||'each',barcode:r.barcode||null,minStock:5,image:r.imageData||null});created++}
+    });
+    localStorage.setItem('farmhack-products-cache',JSON.stringify(products));
+    localStorage.setItem('farmhack-inventory-pending',JSON.stringify({products:products,syncedAt:new Date().toISOString(),summary:{updated:updated,created:created}}));
+    addLog('Synced: '+updated+' updated, '+created+' new');toast('Synced: '+updated+' updated, '+created+' new');refreshPending();
+  });
+}
+
+function btScan(){
+  if(!navigator.bluetooth){toast('Web Bluetooth needs Chrome or Edge');document.getElementById('btStatus').textContent='Not available in this browser';return}
+  document.getElementById('btStatus').textContent='Scanning for Farm POS...';
+  navigator.bluetooth.requestDevice({filters:[{name:'FarmPOS'},{namePrefix:'Farm'},{services:[BT_SERVICE]}],optionalServices:[BT_SERVICE]})
+    .then(function(device){btDevice=device;document.getElementById('btStatus').textContent='Found: '+device.name+' - connecting...';return device.gatt.connect()})
+    .then(function(server){return server.getPrimaryService(BT_SERVICE)})
+    .then(function(service){return service.getCharacteristic(BT_CHAR)})
+    .then(function(char){
+      btChar=char;setConnBadge('ok','BT: '+btDevice.name);
+      document.getElementById('btStatus').textContent='Connected to '+btDevice.name;
+      document.getElementById('btConnected').style.display='block';
+      btDevice.addEventListener('gattserverdisconnected',function(){btChar=null;btDevice=null;setConnBadge('off','Offline');document.getElementById('btConnected').style.display='none';document.getElementById('btStatus').textContent='Disconnected'});
+    })
+    .catch(function(e){document.getElementById('btStatus').textContent='Failed: '+e.message});
+}
+function btSync(){
+  if(!btChar){toast('Not connected via Bluetooth');return}
+  dbGetAll(function(all){
+    if(!all.length){toast('Nothing to sync');return}
+    var payload=JSON.stringify({type:'inventory-sync',items:all.map(function(r){return{name:r.productName,barcode:r.barcode,stock:r.stockCount,price:r.price,hasImage:!!r.imageData}})});
+    var data=new TextEncoder().encode(payload);
+    var chunks=[];for(var i=0;i<data.length;i+=512)chunks.push(data.slice(i,i+512));
+    var send=function(idx){if(idx>=chunks.length){addLog('BT sync: '+all.length+' items sent');toast('Sent '+all.length+' items via Bluetooth');return}btChar.writeValueWithResponse(chunks[idx]).then(function(){send(idx+1)}).catch(function(e){toast('BT error: '+e.message)})};
+    send(0);
+  });
+}
+
+function exportJSON(){
+  dbGetAll(function(all){
+    if(!all.length){toast('Nothing to export');return}
+    var payload={exportedAt:new Date().toISOString(),appVersion:'2.0',type:'farm-inventory-capture',items:all.map(function(r){return{productName:r.productName,barcode:r.barcode||null,stockCount:(r.stockCount!==undefined?r.stockCount:null),price:r.price||null,unit:r.unit||null,notes:r.notes||null,imageData:r.imageData||null,capturedAt:r.capturedAt}})};
+    var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+    var url=URL.createObjectURL(blob);var a=document.createElement('a');
+    a.href=url;a.download='farm-inventory-'+new Date().toISOString().slice(0,10)+'.json';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(url)},2000);toast('Downloaded '+all.length+' items');
+  });
+}
+
+function loadProductList(input){
+  var file=input.files&&input.files[0];if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      var data=JSON.parse(ev.target.result);
+      var products=Array.isArray(data)?data:(data.products||data.items||[]);
+      productCache=products;buildSuggestions();
+      document.getElementById('loadStatus').textContent='Loaded '+products.length+' products';
+      document.getElementById('loadStatus').style.color='var(--green)';toast('Loaded '+products.length+' products');
+    }catch(e){
+      var lines=ev.target.result.trim().split('\n');
+      var headers=lines[0].split(',').map(function(h){return h.trim().replace(/"/g,'').toLowerCase()});
+      productCache=lines.slice(1).map(function(l){var vals=l.split(',').map(function(v){return v.trim().replace(/^"|"$/g,'')});var obj={};headers.forEach(function(h,i){obj[h]=vals[i]||''});return{name:obj.name||'',barcode:obj.barcode||null,price:parseFloat(obj.price)||0,stock:parseInt(obj.stock)||0}}).filter(function(p){return p.name});
+      buildSuggestions();document.getElementById('loadStatus').textContent='Loaded '+productCache.length+' products from CSV';document.getElementById('loadStatus').style.color='var(--green)';
+    }
+  };reader.readAsText(file);input.value='';
+}
+function buildSuggestions(){var names=productCache.map(function(p){return p.name||''}).filter(Boolean);['prodSuggest','prodSuggest2'].forEach(function(id){var dl=document.getElementById(id);if(!dl)return;dl.innerHTML=names.map(function(n){return'<option value="'+escAttr(n)+'">'}).join('')})}
+function clearAll(){dbGetAll(function(all){if(!all.length){toast('Nothing to clear');return}if(!confirm('Clear all '+all.length+' items? Export first!'))return;dbClear(function(){refresh();toast('Cleared')})})}
+
+function addLog(msg){var el=document.getElementById('syncLog');var card=document.getElementById('logCard');card.style.display='block';var ts=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});el.innerHTML='<div style="padding:5px 0;border-bottom:1px solid var(--border);display:flex;gap:8px"><span style="color:var(--gray);flex-shrink:0">'+ts+'</span><span style="color:var(--green)">'+esc(msg)+'</span></div>'+el.innerHTML}
+function clearLog(){document.getElementById('syncLog').innerHTML='';document.getElementById('logCard').style.display='none'}
+function setConnBadge(state,label){var el=document.getElementById('connBadge');el.className='conn-badge conn-'+state;el.innerHTML='<div class="conn-dot"></div>'+esc(label)}
+
+function showScreen(name){
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active')});
+  document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active')});
+  document.getElementById('screen-'+name).classList.add('active');
+  var map={capture:0,scan:1,review:2,sync:3,export:4};
+  if(map[name]!==undefined)document.querySelectorAll('.tab-btn')[map[name]].classList.add('active');
+  currentScreen=name;updateBottomBar();
+  if(name==='review')refreshReview();
+  if(name==='sync'){refreshPending();document.getElementById('posUrl').value=POS_URL}
+  if(name==='export')refreshExport();
+}
+function setMethod(m){
+  currentMethod=m;
+  document.getElementById('mPhotoBtn').classList.toggle('active',m==='photo');
+  document.getElementById('mNameBtn').classList.toggle('active',m==='name');
+  document.getElementById('mPhoto').style.display=m==='photo'?'block':'none';
+  document.getElementById('mName').style.display=m==='name'?'block':'none';
+}
+function setConnMethod(m){
+  connMethod=m;
+  document.getElementById('connWifiBtn').classList.toggle('active',m==='wifi');
+  document.getElementById('connBtBtn').classList.toggle('active',m==='bt');
+  document.getElementById('connWifi').style.display=m==='wifi'?'block':'none';
+  document.getElementById('connBt').style.display=m==='bt'?'block':'none';
+}
+function updateBottomBar(){var btn=document.getElementById('bottomBtn');var labels={capture:'&#128247; Open Camera',scan:'&#128247; Live Barcode Scanner',review:'&#128228; Export Now',sync:'&#x1F504; Test Connection',export:'&#128228; Download File'};btn.innerHTML=labels[currentScreen]||'&#128247; Open Camera'}
+function bottomAction(){if(currentScreen==='capture')triggerCamera(currentMethod==='photo'?'main':'name');else if(currentScreen==='scan')openLiveScanner();else if(currentScreen==='review')exportJSON();else if(currentScreen==='sync')testWifi();else if(currentScreen==='export')exportJSON()}
+
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function escAttr(s){return String(s||'').replace(/"/g,'&quot;')}
+var toastTimer=null;
+function toast(msg){var el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');if(toastTimer)clearTimeout(toastTimer);toastTimer=setTimeout(function(){el.classList.remove('show')},2500)}
+
+function showCameraBlockedMessage(){
+  var isFileUrl=location.protocol==='file:';
+  var msg=isFileUrl
+    ? 'Camera scanning blocked\n\nBrowsers block camera access when opening files directly.\n\nFix: Serve this file over HTTP instead:\n\n  1. Copy file to Pi home folder\n  2. Open http://'+POS_URL.replace(/https?:\/\//,'').split('/')[0]+'/farm-inventory-offline.html\n\nOr use manual barcode entry below.'
+    : 'Camera permission denied\n\nTo fix:\n  1. Tap the camera/lock icon in the browser address bar\n  2. Set Camera to Allow\n  3. Reload the page\n\nOr use manual barcode entry below.';
+  alert(msg);
+}
+
+initDB(function(){
+  initBarcodeDetector();
+  // If file:// - update scan button label to indicate photo mode
+  if(location.protocol==='file:'){
+    document.getElementById('scanCameraLabel').textContent='Scan via Photo (file mode)';
+  }
+  try{var raw=localStorage.getItem('farmhack-products-cache');if(raw){productCache=JSON.parse(raw);buildSuggestions()}}catch(e){}
+  document.getElementById('posUrl').value=POS_URL;
+  // Check if secure context — if not, hide live scanner and show warning
+  if(!window.isSecureContext){
+    document.getElementById('liveScanBtn').style.display='none';
+    document.getElementById('liveScanWarn').style.display='block';
+  }
+  refresh();updateBottomBar();
+  if(POS_URL)setTimeout(testWifi,1500);
+});
+</script>
+</body>
+</html>
