@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cover Crop OS | FarmHack Box</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --forest:#1e4d2b; --forest-md:#2a6338; --forest-lt:#4a7c59;
+  --forest-bg:#eaf3ec; --forest-rim:#d0e8d6;
+  --sage:#5a7f5e; --sage-lt:#c8deca;
+  --amber:#c47a2e; --amber-bg:#fff8ec; --amber-bdr:#f5d97e;
+  --amber-dk:#8a5d00; --amber-rim:#fcd34d;
+  --ink:#1a1a14; --cream:#f7f3ec; --cream-dk:#ede8df;
+  --line:#ddd8ce; --line-dk:#b8b2a6; --dim:#6b6760; --faint:#9e9a93;
+  --good:#1e6b3a; --good-bg:#d4edda; --good-bdr:#a3d4af;
+  --bad:#8b1a1a; --bad-bg:#fee2e2; --bad-bdr:#fca5a5;
+  --info:#1a4f7a; --info-bg:#dbeafe; --info-bdr:#93c5fd;
+  --warn:#8a5d00; --warn-bg:#fef3c7;
+  --white:#fff; --r:8px; --r-lg:14px;
+  --shadow:0 4px 24px rgba(30,77,43,.10),0 1px 4px rgba(30,77,43,.06);
+  --shadow-lg:0 8px 48px rgba(30,77,43,.13),0 2px 8px rgba(30,77,43,.07);
+  --mode-dark:var(--forest); --mode-md:var(--forest-md);
+  --mode-bg:var(--forest-bg); --mode-rim:var(--forest-rim);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'DM Sans',sans-serif;font-size:15px;line-height:1.6;background:var(--cream);color:var(--ink);min-height:100vh}
+
+/* TOPBAR */
+.topbar{position:sticky;top:0;z-index:100;background:var(--forest);border-bottom:2px solid #16381f;box-shadow:0 2px 16px rgba(0,0,0,.22)}
+.topbar-inner{max-width:1100px;margin:0 auto;padding:0 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;padding:13px 0;text-decoration:none;flex-shrink:0}
+.brand-icon{width:30px;height:30px;background:rgba(255,255,255,.12);border-radius:6px;display:flex;align-items:center;justify-content:center}
+.brand-icon svg{width:17px;height:17px}
+.brand-name{font-family:'DM Mono',monospace;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#fff}
+.brand-sep{width:1px;height:20px;background:rgba(255,255,255,.2);margin:0 6px}
+.brand-sub{font-size:11.5px;color:rgba(255,255,255,.5);font-weight:400}
+.topbar-nav{display:flex;gap:0}
+.topbar-nav a{font-family:'DM Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.55);text-decoration:none;padding:0 14px;height:56px;display:flex;align-items:center;gap:6px;border-left:1px solid rgba(255,255,255,.1);transition:color .12s,background .12s;cursor:pointer;position:relative}
+.topbar-nav a:hover{color:rgba(255,255,255,.9);background:rgba(255,255,255,.08)}
+.topbar-nav a.active{color:#fff;background:rgba(255,255,255,.12)}
+.topbar-nav a.active::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,.6)}
+.nrcs-btn{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;padding:6px 13px;border-radius:var(--r);border:1.5px solid rgba(255,255,255,.25);color:rgba(255,255,255,.7);background:none;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px}
+.nrcs-btn:hover{border-color:rgba(255,255,255,.5);color:#fff}
+.nrcs-btn.on{background:rgba(245,217,126,.18);border-color:var(--amber-rim);color:#fde68a}
+
+/* NRCS STATE BAR */
+.nrcs-bar{display:none;background:var(--warn-bg);border-bottom:2px solid var(--amber-bdr)}
+.nrcs-bar.visible{display:block}
+.nrcs-bar-inner{max-width:1100px;margin:0 auto;padding:10px 20px;display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+.nrcs-bar label{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--amber-dk)}
+.nrcs-bar select{font-family:'DM Sans',sans-serif;font-size:12px;color:var(--ink);background:var(--white);border:1px solid var(--amber-rim);border-radius:6px;padding:5px 8px;outline:none;cursor:pointer}
+.nrcs-bar select:focus{border-color:var(--amber);box-shadow:0 0 0 2px rgba(196,122,46,.2)}
+.rate-chip{font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--good);background:var(--good-bg);border:1px solid var(--good-bdr);border-radius:20px;padding:3px 11px}
+.dl-btn{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:5px 12px;border-radius:var(--r);border:1.5px solid var(--amber-rim);color:var(--amber-dk);background:var(--white);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .15s;margin-left:auto;text-decoration:none}
+.dl-btn:hover{background:var(--amber-bg);border-color:var(--amber)}
+
+/* PAGE */
+.page-outer{max-width:1100px;margin:0 auto;padding:32px 20px 80px}
+
+/* HERO */
+.hero{border-radius:var(--r-lg);padding:36px 44px;margin-bottom:28px;position:relative;overflow:hidden;color:#fff;background:linear-gradient(135deg,var(--forest) 0%,var(--forest-md) 60%,var(--forest-lt) 100%)}
+.hero::before{content:'';position:absolute;inset:0;background-image:radial-gradient(circle at 80% 20%,rgba(255,255,255,.07) 0%,transparent 55%);pointer-events:none}
+.hero-kicker{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.hero-kicker::before{content:'';display:inline-block;width:22px;height:2px;background:rgba(255,255,255,.4)}
+.hero h1{font-family:'DM Serif Display',Georgia,serif;font-size:clamp(22px,3.2vw,34px);font-weight:400;line-height:1.2;margin-bottom:8px}
+.hero h1 em{font-style:italic;color:rgba(255,255,255,.68)}
+.hero-desc{font-size:14px;color:rgba(255,255,255,.7);max-width:580px;line-height:1.6;margin-bottom:0}
+.hero-pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.hero-pill{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;padding:5px 12px;border-radius:20px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.7);cursor:pointer;transition:all .15s;text-decoration:none}
+.hero-pill:hover,.hero-pill.active{background:rgba(255,255,255,.22);border-color:rgba(255,255,255,.4);color:#fff}
+
+/* STEP RAIL (TABS) */
+.step-rail{display:flex;background:var(--white);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;margin-bottom:24px;box-shadow:var(--shadow)}
+.step-item{flex:1;padding:12px 14px;display:flex;flex-direction:column;gap:2px;border-right:1px solid var(--line);cursor:pointer;transition:background .15s;position:relative}
+.step-item:last-child{border-right:none}
+.step-item:hover{background:var(--cream)}
+.step-item.active{background:var(--forest-bg)}
+.step-item.active::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--forest)}
+.step-num{width:20px;height:20px;background:var(--cream-dk);color:var(--dim);border-radius:50%;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-bottom:3px;transition:background .15s,color .15s;flex-shrink:0}
+.step-item.active .step-num{background:var(--forest);color:#fff}
+.step-label{font-family:'DM Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.step-item.active .step-label{color:var(--forest)}
+.step-sub{font-size:10.5px;color:var(--faint)}
+
+/* PANELS */
+.panel{background:var(--white);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);overflow:hidden;margin-bottom:20px}
+.panel-head{padding:16px 22px;border-bottom:1px solid var(--line);background:linear-gradient(to right,var(--forest-bg),var(--white) 65%);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.panel-title{font-family:'DM Serif Display',serif;font-size:17px;font-weight:400;color:var(--forest)}
+.panel-meta{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.06em;color:var(--faint)}
+.panel-body{padding:22px}
+.panel-section{padding:20px 22px;border-bottom:1px solid var(--cream-dk)}
+.panel-section:last-child{border-bottom:none}
+
+/* SECTION KICKER */
+.section-kicker{font-family:'DM Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.kicker-badge{padding:2px 7px;background:var(--forest-bg);color:var(--forest);border:1px solid var(--forest-rim);border-radius:4px;font-size:9px}
+
+/* GRID */
+.main-grid{display:grid;grid-template-columns:1fr 310px;gap:22px;align-items:start}
+.sidebar-sticky{position:sticky;top:72px}
+@media(max-width:800px){.main-grid{grid-template-columns:1fr}}
+
+/* FIELDS */
+.field-group{display:flex;flex-direction:column;gap:4px;margin-bottom:13px}
+.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-bottom:13px}
+.field-grid.cols3{grid-template-columns:1fr 1fr 1fr}
+.field-label{font-family:'DM Mono',monospace;font-size:9.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+.field-input,.field-select{font-family:'DM Sans',sans-serif;font-size:13.5px;color:var(--ink);background:var(--cream);border:1px solid var(--line);border-radius:6px;padding:8px 11px;transition:border-color .15s,background .15s;width:100%;outline:none}
+.field-input:focus,.field-select:focus{border-color:var(--forest);background:#fff;box-shadow:0 0 0 3px var(--forest-bg)}
+
+/* RANGE SLIDERS */
+.slider-wrap{margin-bottom:4px}
+.slider-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.slider-lbl{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--dim)}
+.slider-val{font-family:'DM Mono',monospace;font-size:15px;font-weight:700;color:var(--forest)}
+input[type=range]{-webkit-appearance:none;width:100%;height:6px;background:var(--line);border-radius:3px;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:19px;height:19px;background:var(--forest);border:3px solid #fff;border-radius:50%;box-shadow:0 1px 5px rgba(0,0,0,.2);cursor:pointer;transition:transform .12s}
+input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.15)}
+input[type=range]::-moz-range-thumb{width:19px;height:19px;background:var(--forest);border:3px solid #fff;border-radius:50%;cursor:pointer}
+.slider-hints{display:flex;justify-content:space-between;margin-top:3px}
+.slider-hint{font-family:'DM Mono',monospace;font-size:9px;color:var(--faint)}
+
+/* RESULT CARD */
+.result-card{background:var(--forest);border-radius:var(--r-lg);padding:20px;color:#fff;margin-bottom:16px}
+.result-kicker{font-family:'DM Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:12px}
+.result-big{font-family:'DM Serif Display',serif;font-size:48px;line-height:1;color:#fff;margin-bottom:4px}
+.result-unit{font-size:13px;color:rgba(255,255,255,.6);margin-bottom:16px}
+.result-rows{display:flex;flex-direction:column;gap:0}
+.result-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px}
+.result-row:last-child{border-bottom:none}
+.result-row-lbl{color:rgba(255,255,255,.6)}
+.result-row-val{font-family:'DM Mono',monospace;font-weight:600;color:#fff}
+
+/* SCORE MINI CARDS */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.stat-card{background:var(--cream);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;text-align:center}
+.stat-card-num{font-family:'DM Serif Display',serif;font-size:26px;color:var(--forest);line-height:1.1}
+.stat-card-lbl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-top:3px}
+.stat-card.good .stat-card-num{color:var(--good)}
+.stat-card.amber .stat-card-num{color:var(--amber)}
+.stat-card.bad .stat-card-num{color:var(--bad)}
+
+/* SPECIES CARDS */
+.species-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:640px){.species-grid{grid-template-columns:1fr}}
+.species-card{background:var(--white);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px;cursor:pointer;transition:all .15s}
+.species-card:hover{border-color:var(--forest-lt);box-shadow:var(--shadow)}
+.species-card.active{border-color:var(--forest);background:var(--forest-bg)}
+.sp-name{font-family:'DM Serif Display',serif;font-size:16px;color:var(--ink);margin-bottom:2px}
+.sp-meta{font-family:'DM Mono',monospace;font-size:9.5px;color:var(--faint);letter-spacing:.04em;margin-bottom:8px}
+.sp-note{font-size:12px;color:var(--dim);line-height:1.5;margin-bottom:10px}
+.sp-pills{display:flex;flex-wrap:wrap;gap:5px}
+.sp-pill{font-family:'DM Mono',monospace;font-size:9px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border-radius:20px;border:1px solid var(--line);color:var(--dim);background:var(--cream)}
+.sp-pill.green{background:var(--good-bg);color:var(--good);border-color:var(--good-bdr)}
+.sp-pill.amber{background:var(--warn-bg);color:var(--amber-dk);border-color:var(--amber-rim)}
+.sp-pill.blue{background:var(--info-bg);color:var(--info);border-color:var(--info-bdr)}
+
+/* DETAIL VIEW */
+.detail-back{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);cursor:pointer;display:inline-flex;align-items:center;gap:5px;margin-bottom:20px;border:none;background:none;padding:0;transition:color .15s}
+.detail-back:hover{color:var(--forest)}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-bottom:16px}
+.detail-cell{background:var(--cream);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.detail-cell-lbl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:4px}
+.detail-cell-val{font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:var(--ink)}
+.detail-cell-val.big{font-family:'DM Serif Display',serif;font-size:22px;color:var(--forest)}
+
+/* MIX COMP */
+.mix-comp{background:var(--cream);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:10px}
+.mix-comp-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.mix-num{font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:var(--forest);width:20px;flex-shrink:0;letter-spacing:.04em}
+.mix-remove{font-size:14px;color:var(--faint);border:none;background:none;cursor:pointer;padding:0 4px;transition:color .15s;flex-shrink:0;line-height:1}
+.mix-remove:hover{color:var(--bad)}
+.add-comp-btn{width:100%;border:2px dashed var(--line-dk);border-radius:var(--r);padding:12px;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);background:none;cursor:pointer;transition:all .15s}
+.add-comp-btn:hover{border-color:var(--forest-lt);color:var(--forest);background:var(--forest-bg)}
+
+/* TOGGLE BUTTONS */
+.toggle-group{display:flex;gap:0;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:13px}
+.toggle-btn{flex:1;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;padding:8px 6px;border:none;background:var(--white);color:var(--dim);cursor:pointer;transition:all .15s;border-right:1px solid var(--line)}
+.toggle-btn:last-child{border-right:none}
+.toggle-btn:hover{background:var(--cream);color:var(--ink)}
+.toggle-btn.active{background:var(--forest);color:#fff}
+
+/* BUDGET ROWS */
+.budget-section-head{font-family:'DM Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:8px 14px;background:var(--cream-dk);color:var(--dim);display:flex;align-items:center;justify-content:space-between}
+.budget-row{display:flex;align-items:center;gap:8px;padding:7px 14px;border-bottom:1px solid var(--cream-dk)}
+.budget-row:last-child{border-bottom:none}
+.budget-row-lbl{font-size:13px;color:var(--dim);flex:1}
+.budget-row-val{font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:var(--ink);min-width:70px;text-align:right}
+.budget-row-val.positive{color:var(--good)}
+.budget-row-val.negative{color:var(--bad)}
+.budget-row-input{font-family:'DM Mono',monospace;font-size:12px;background:var(--cream);border:1px solid var(--line);border-radius:5px;padding:3px 7px;width:80px;text-align:right;outline:none;color:var(--ink)}
+.budget-row-input:focus{border-color:var(--forest);background:#fff}
+
+/* NRCS PANEL */
+.nrcs-panel{background:var(--warn-bg);border:1px solid var(--amber-bdr);border-radius:var(--r-lg);padding:16px;margin-top:16px}
+.nrcs-panel-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.nrcs-panel-title{font-family:'DM Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--amber-dk)}
+.nrcs-practice{padding:10px 0;border-bottom:1px solid var(--amber-rim)}
+.nrcs-practice:last-child{border-bottom:none}
+.nrcs-code{font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--amber-dk)}
+.nrcs-name{font-size:12px;font-weight:600;color:var(--ink);margin-left:6px}
+.nrcs-rate{font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--good);float:right}
+.nrcs-note{font-size:11px;color:var(--dim);margin-top:4px;line-height:1.5}
+
+/* EXT LINK */
+.ext-link{display:inline-flex;align-items:center;gap:6px;font-family:'DM Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:.04em;color:var(--forest);text-decoration:none;padding:6px 12px;border:1px solid var(--forest-rim);border-radius:var(--r);background:var(--forest-bg);transition:all .15s;margin-top:10px}
+.ext-link:hover{background:var(--forest);color:#fff}
+
+/* CITATION */
+.citation{background:var(--cream);border-left:3px solid var(--forest-lt);border-radius:0 var(--r) var(--r) 0;padding:10px 14px;margin-bottom:8px}
+.citation-title{font-size:13px;font-weight:600;color:var(--ink);margin-bottom:2px}
+.citation-org{font-family:'DM Mono',monospace;font-size:10px;color:var(--forest);margin-bottom:4px;letter-spacing:.02em}
+.citation-desc{font-size:12px;color:var(--dim);line-height:1.5}
+.citation-link{font-family:'DM Mono',monospace;font-size:10px;color:var(--forest);text-decoration:none}
+.citation-link:hover{text-decoration:underline}
+
+/* FOOTER */
+.footer{background:var(--forest);color:rgba(255,255,255,.5);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.05em;padding:14px 20px;margin-top:48px}
+.footer-inner{max-width:1100px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.footer a{color:rgba(255,255,255,.4);text-decoration:none}
+.footer a:hover{color:rgba(255,255,255,.8)}
+
+/* UTIL */
+.hidden{display:none!important}
+.tag{display:inline-block;font-family:'DM Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:2px 8px;border-radius:4px;margin-right:4px}
+.tag-green{background:var(--good-bg);color:var(--good);border:1px solid var(--good-bdr)}
+.tag-amber{background:var(--warn-bg);color:var(--amber-dk);border:1px solid var(--amber-rim)}
+.tag-blue{background:var(--info-bg);color:var(--info);border:1px solid var(--info-bdr)}
+.tag-grey{background:var(--cream-dk);color:var(--dim);border:1px solid var(--line)}
+.divider{height:1px;background:var(--line);margin:16px 0}
+.notice{background:var(--info-bg);border:1px solid var(--info-bdr);border-radius:var(--r);padding:12px 14px;display:flex;gap:10px;align-items:flex-start;margin-bottom:16px}
+.notice p{font-size:12.5px;color:var(--info);line-height:1.55}
+a.green-cta{display:inline-flex;align-items:center;gap:8px;font-family:'DM Mono',monospace;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:10px 20px;background:var(--forest);color:#fff;border-radius:var(--r);text-decoration:none;transition:background .15s;margin-top:12px}
+a.green-cta:hover{background:var(--forest-md)}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="index.html">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2 22c1.25-1.25 2.72-2 4-2 1.72 0 2.28 1 4 1s2.28-1 4-1 2.28 1 4 1"/>
+          <path d="M22 2s-7 1-10 4c-2.93 2.93-2.93 8.07 0 11"/>
+          <path d="M20 16s-1 0-2-1c-1.75-1.75-1.75-5.25 0-7l4-4"/>
+        </svg>
+      </div>
+      <span class="brand-name">Cover Crop OS</span>
+      <span class="brand-sep"></span>
+      <span class="brand-sub">FarmHack Box · NECCC</span>
+    </a>
+    <nav class="topbar-nav">
+      <a onclick="switchTab('selector',this)" class="active">Species</a>
+      <a onclick="switchTab('ncalc',this)">N-Release</a>
+      <a onclick="switchTab('mix',this)">Mix</a>
+      <a onclick="switchTab('econ',this)">Economics</a>
+      <a onclick="switchTab('nrcs-ref',this)">NRCS</a>
+      <a onclick="switchTab('resources',this)">Sources</a>
+    </nav>
+    <button class="nrcs-btn" id="nrcs-toggle-btn" onclick="toggleNRCS()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      NRCS/EQIP
+    </button>
+  </div>
+</header>
+
+<!-- NRCS STATE BAR -->
+<div class="nrcs-bar" id="nrcs-bar">
+  <div class="nrcs-bar-inner">
+    <label>State</label>
+    <select id="state-sel" onchange="updateRate()">
+      <option value="NY,55,66,69,69">New York</option>
+      <option value="PA,52,62,65,65">Pennsylvania</option>
+      <option value="VT,60,72,75,75">Vermont</option>
+      <option value="ME,65,78,81,81">Maine</option>
+      <option value="NH,62,74,78,78">New Hampshire</option>
+      <option value="MA,65,76,81,81">Massachusetts</option>
+      <option value="CT,63,74,79,79">Connecticut</option>
+      <option value="NJ,58,70,73,73">New Jersey</option>
+      <option value="MD,54,65,68,68">Maryland</option>
+      <option value="DE,50,60,63,63">Delaware</option>
+      <option value="VA,50,60,63,63">Virginia</option>
+      <option value="WV,45,54,56,56">West Virginia</option>
+      <option value="OH,50,60,63,63">Ohio</option>
+      <option value="MI,54,65,68,68">Michigan</option>
+      <option value="IN,50,60,63,63">Indiana</option>
+      <option value="IL,62,74,78,78">Illinois</option>
+      <option value="WI,54,65,68,68">Wisconsin</option>
+      <option value="MN,50,60,63,63">Minnesota</option>
+      <option value="IA,34,50,43,43">Iowa</option>
+      <option value="MO,50,60,63,63">Missouri</option>
+      <option value="NC,50,60,63,63">North Carolina</option>
+      <option value="TN,50,60,63,63">Tennessee</option>
+      <option value="KY,48,58,60,60">Kentucky</option>
+    </select>
+    <label>Producer Type</label>
+    <select id="prod-sel" onchange="updateRate()">
+      <option value="0">Standard (single species)</option>
+      <option value="1">Multi-species mix</option>
+      <option value="2">Certified Organic</option>
+      <option value="3">Beginning Farmer</option>
+    </select>
+    <span>§340 Rate:</span>
+    <span class="rate-chip" id="rate-display">$55/ac</span>
+    <button class="dl-btn" onclick="downloadCSV()">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download State CSV
+    </button>
+  </div>
+</div>
+
+<div class="page-outer">
+
+<!-- ═══ HERO ═══ -->
+<div class="hero">
+  <div class="hero-kicker">Northeast Cover Crops Council · NECCC Database · FarmHack Box</div>
+  <h1>Cover Crop <em>Decision Support</em></h1>
+  <p class="hero-desc">Species selection, nitrogen-release estimation, mix design, and partial-budget economics. Data drawn from the NECCC 42-species Northeast database and the PSA CC-NCALC methodology.</p>
+  <div class="hero-pills">
+    <span class="hero-pill">42-species NE database</span>
+    <span class="hero-pill">Zones 4–7</span>
+    <span class="hero-pill">N-release estimator</span>
+    <span class="hero-pill">EQIP §340 ready</span>
+    <span class="hero-pill">Partial budget tool</span>
+  </div>
+</div>
+
+<!-- ═══ STEP RAIL ═══ -->
+<div class="step-rail" id="step-rail">
+  <div class="step-item active" onclick="switchTab('selector',null,0)">
+    <div class="step-num">1</div>
+    <div class="step-label">Species</div>
+    <div class="step-sub">Filter &amp; select</div>
+  </div>
+  <div class="step-item" onclick="switchTab('ncalc',null,1)">
+    <div class="step-num">2</div>
+    <div class="step-label">N-Release</div>
+    <div class="step-sub">Estimate credit</div>
+  </div>
+  <div class="step-item" onclick="switchTab('mix',null,2)">
+    <div class="step-num">3</div>
+    <div class="step-label">Mix Design</div>
+    <div class="step-sub">Multi-species</div>
+  </div>
+  <div class="step-item" onclick="switchTab('econ',null,3)">
+    <div class="step-num">4</div>
+    <div class="step-label">Economics</div>
+    <div class="step-sub">Partial budget</div>
+  </div>
+  <div class="step-item" onclick="switchTab('nrcs-ref',null,4)">
+    <div class="step-num">5</div>
+    <div class="step-label">NRCS Codes</div>
+    <div class="step-sub">EQIP/CSP</div>
+  </div>
+  <div class="step-item" onclick="switchTab('resources',null,5)">
+    <div class="step-num">6</div>
+    <div class="step-label">Sources</div>
+    <div class="step-sub">Citations</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ TAB: SPECIES ══════════════════════════ -->
+<div id="tab-selector" class="tab-pane">
+  <div id="sp-list-view">
+    <div class="main-grid">
+      <div>
+        <!-- Filter panel -->
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">Species Selector</span>
+            <span class="panel-meta">NECCC Northeast Database</span>
+          </div>
+          <div class="panel-body">
+            <div class="section-kicker"><span class="kicker-badge">Step 1</span>Filter by field conditions and goals</div>
+            <div class="field-grid">
+              <div class="field-group">
+                <label class="field-label">Hardiness Zone</label>
+                <select class="field-select" id="f-zone" onchange="filterSpecies()">
+                  <option value="4">Zone 4 — Northern ME, VT, NY Adirondacks</option>
+                  <option value="5" selected>Zone 5 — ME south, NH, upstate NY, PA north</option>
+                  <option value="6">Zone 6 — NY metro, PA, NJ, MD, OH, MI lower</option>
+                  <option value="7">Zone 7 — MD coastal, VA, WV, NC, KY, TN</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label class="field-label">Primary Goal</label>
+                <select class="field-select" id="f-goal" onchange="filterSpecies()">
+                  <option value="erosion">Erosion Control</option>
+                  <option value="nitrogen">Nitrogen Fixation</option>
+                  <option value="biomass">High Biomass</option>
+                  <option value="weed">Weed Suppression</option>
+                  <option value="forage">Forage / Grazing</option>
+                  <option value="compaction">Compaction Relief</option>
+                  <option value="winter-kill">Winter Kill Mulch</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label class="field-label">Soil Type</label>
+                <select class="field-select" id="f-soil" onchange="filterSpecies()">
+                  <option value="sandy">Sandy / Gravelly</option>
+                  <option value="loam" selected>Loam / Silt Loam</option>
+                  <option value="clay">Clay / Silty Clay</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label class="field-label">Drainage</label>
+                <select class="field-select" id="f-drain" onchange="filterSpecies()">
+                  <option value="well" selected>Well Drained</option>
+                  <option value="moderate">Moderate</option>
+                  <option value="poor">Poorly Drained</option>
+                </select>
+              </div>
+            </div>
+            <p id="sp-count" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--faint);margin-top:4px"></p>
+          </div>
+        </div>
+        <!-- Results -->
+        <div id="species-results" class="species-grid"></div>
+      </div>
+      <!-- Sidebar -->
+      <div class="sidebar-sticky">
+        <div class="panel">
+          <div class="panel-head"><span class="panel-title">Quick Reference</span></div>
+          <div class="panel-body" style="font-size:13px;color:var(--dim);line-height:1.7">
+            <p style="margin-bottom:10px">Click a species card to view detailed rates, planting windows, and termination options.</p>
+            <div class="divider"></div>
+            <div style="margin-bottom:8px"><span class="tag tag-green">N-fix</span> Species that fix atmospheric nitrogen</div>
+            <div style="margin-bottom:8px"><span class="tag tag-amber">§340</span> EQIP Practice 340 eligible</div>
+            <div style="margin-bottom:8px"><span class="tag tag-blue">Mix</span> Designed for multi-species mixtures</div>
+            <div class="divider"></div>
+            <p style="font-size:11px;color:var(--faint)">Data: NECCC 42-species database (covercrop-selector.org). Hardiness zones 4–7. Updated by 35+ NE specialists via PSU/PSA collaboration, 2019–2024.</p>
+          </div>
+        </div>
+        <div class="notice">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2" flex-shrink="0" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <p>For the full interactive NECCC tool with side-by-side comparisons, visit <a href="https://covercrop-selector.org" target="_blank" style="color:var(--info);font-weight:600">covercrop-selector.org</a></p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Species Detail -->
+  <div id="sp-detail-view" class="hidden">
+    <button class="detail-back" onclick="backToList()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      Back to species list
+    </button>
+    <div id="sp-detail-content"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ TAB: N-RELEASE ════════════════════════ -->
+<div id="tab-ncalc" class="tab-pane hidden">
+  <div class="main-grid">
+    <div>
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">N-Release Estimator</span>
+          <span class="panel-meta">CERES model — Thapa et al. 2022</span>
+        </div>
+        <div class="panel-section">
+          <div class="section-kicker"><span class="kicker-badge">Species</span>Select residue type</div>
+          <div class="field-group">
+            <label class="field-label">Cover Crop Species</label>
+            <select class="field-select" id="nc-species" onchange="calcN()">
+              <option value="40,1.1,false">Cereal Rye (C:N 40, N 1.1%)</option>
+              <option value="35,1.3,false">Winter Wheat (C:N 35, N 1.3%)</option>
+              <option value="38,1.2,false">Winter Triticale (C:N 38, N 1.2%)</option>
+              <option value="30,1.8,false">Oats / Winter-Kill (C:N 30, N 1.8%)</option>
+              <option value="11,3.8,true">Hairy Vetch — N-fix (C:N 11, N 3.8%)</option>
+              <option value="14,3.5,true">Crimson Clover — N-fix (C:N 14, N 3.5%)</option>
+              <option value="16,3.2,true">Red Clover — N-fix (C:N 16, N 3.2%)</option>
+              <option value="12,3.5,true">Field Peas — N-fix (C:N 12, N 3.5%)</option>
+              <option value="10,4.0,true">Sunn Hemp — N-fix (C:N 10, N 4.0%)</option>
+              <option value="16,2.5,false">Tillage Radish (C:N 16, N 2.5%)</option>
+              <option value="18,2.8,true">Rye + Hairy Vetch Mix (blended)</option>
+              <option value="22,2.5,true">Oats + Field Peas Mix (blended)</option>
+            </select>
+          </div>
+        </div>
+        <div class="panel-section">
+          <div class="section-kicker"><span class="kicker-badge">Biomass</span>At termination</div>
+          <div class="slider-wrap">
+            <div class="slider-header">
+              <span class="slider-lbl">Fresh Biomass</span>
+              <span class="slider-val"><span id="nc-bv">3000</span> lbs/ac</span>
+            </div>
+            <input type="range" id="nc-b" min="500" max="8000" step="250" value="3000" oninput="calcN()">
+            <div class="slider-hints"><span class="slider-hint">500 (thin stand)</span><span class="slider-hint">8000 (heavy)</span></div>
+          </div>
+          <div class="slider-wrap" style="margin-top:16px">
+            <div class="slider-header">
+              <span class="slider-lbl">Moisture at Termination</span>
+              <span class="slider-val"><span id="nc-mv">75</span>%</span>
+            </div>
+            <input type="range" id="nc-m" min="30" max="90" step="5" value="75" oninput="calcN()">
+            <div class="slider-hints"><span class="slider-hint">30% (dry/senescent)</span><span class="slider-hint">90% (lush spring)</span></div>
+          </div>
+        </div>
+        <div class="panel-section">
+          <div class="section-kicker"><span class="kicker-badge">Management</span>Termination &amp; timing</div>
+          <div class="field-group" style="margin-bottom:16px">
+            <label class="field-label">Residue Management</label>
+            <div class="toggle-group">
+              <button class="toggle-btn active" id="surf-btn" onclick="setTerm('surface')">Surface / No-till</button>
+              <button class="toggle-btn" id="inc-btn" onclick="setTerm('incorporated')">Incorporated (+15%)</button>
+            </div>
+          </div>
+          <div class="slider-wrap">
+            <div class="slider-header">
+              <span class="slider-lbl">Weeks After Termination</span>
+              <span class="slider-val"><span id="nc-wv">6</span> weeks</span>
+            </div>
+            <input type="range" id="nc-w" min="2" max="16" step="1" value="6" oninput="calcN()">
+            <div class="slider-hints"><span class="slider-hint">2 wk</span><span class="slider-hint">16 wk</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Results sidebar -->
+    <div class="sidebar-sticky">
+      <div class="result-card" id="nc-result-card">
+        <div class="result-kicker">Estimated N Release</div>
+        <div class="result-big" id="nc-n-out">—</div>
+        <div class="result-unit">lbs available N per acre</div>
+        <div class="result-rows">
+          <div class="result-row"><span class="result-row-lbl">Dry biomass</span><span class="result-row-val" id="nc-dry">—</span></div>
+          <div class="result-row"><span class="result-row-lbl">N value @ $0.70/lb</span><span class="result-row-val" id="nc-nval">—</span></div>
+          <div class="result-row"><span class="result-row-lbl">C:N ratio</span><span class="result-row-val" id="nc-cn">—</span></div>
+          <div class="result-row"><span class="result-row-lbl">Release timing</span><span class="result-row-val" id="nc-timing">—</span></div>
+          <div class="result-row"><span class="result-row-lbl">Fertilizer credit</span><span class="result-row-val" id="nc-credit">—</span></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-body" style="font-size:12px;color:var(--dim);line-height:1.7">
+          <p style="margin-bottom:8px"><strong style="color:var(--ink)">Methodology:</strong> Simplified CERES N-mineralization subroutine. Availability factor based on C:N ratio. Incorporation adds +15%.</p>
+          <p>For site-specific predictions using live weather and SSURGO soil data, use the PSA <strong>CC-NCALC API</strong>:</p>
+          <a href="https://covercrop-ncalc.org" target="_blank" class="ext-link">covercrop-ncalc.org →</a>
+          <div class="divider"></div>
+          <p style="font-size:11px;color:var(--faint)">Source: Thapa et al. (2022). Modeling surface residue decomposition and N release using CC-NCALC. <em>Nutrient Cycling in Agroecosystems.</em> Mirsky et al. (2019). <em>Renewable Ag and Food Systems.</em></p>
+        </div>
+      </div>
+      <div id="nrcs-ncalc-panel" class="nrcs-panel hidden">
+        <div class="nrcs-panel-head"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--amber-dk)" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span class="nrcs-panel-title">NRCS Practice Codes</span></div>
+        <div class="nrcs-practice"><span class="nrcs-code">§340</span><span class="nrcs-name">Cover Crop</span><span class="nrcs-rate" id="nc-340-rate">$55/ac</span><p class="nrcs-note">N credit must be documented in NMP per §590.</p></div>
+        <div class="nrcs-practice"><span class="nrcs-code">§590</span><span class="nrcs-name">Nutrient Management</span><span class="nrcs-rate">$8–25/ac</span><p class="nrcs-note">Cover crop N credit can be documented here. PSA CC-NCALC output accepted.</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ TAB: MIX ══════════════════════════════ -->
+<div id="tab-mix" class="tab-pane hidden">
+  <div class="main-grid">
+    <div>
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Mix Designer</span>
+          <span class="panel-meta">EQIP multi-species rate applies at 2+ species</span>
+        </div>
+        <div class="panel-body">
+          <div class="section-kicker"><span class="kicker-badge">Components</span>Build your mix</div>
+          <div id="mix-comps"></div>
+          <button class="add-comp-btn" onclick="addMixComp()">+ Add Species to Mix</button>
+        </div>
+      </div>
+    </div>
+    <div class="sidebar-sticky">
+      <div class="result-card">
+        <div class="result-kicker">Mix Summary</div>
+        <div class="result-big" id="mix-rate-out">—</div>
+        <div class="result-unit">lbs/ac total seeding rate</div>
+        <div class="result-rows">
+          <div class="result-row"><span class="result-row-lbl">Blended C:N</span><span class="result-row-val" id="mix-cn-out">—</span></div>
+          <div class="result-row"><span class="result-row-lbl">Legume component</span><span class="result-row-val" id="mix-nfix-out">—</span></div>
+          <div class="result-row"><span class="result-row-lbl">Est. N credit</span><span class="result-row-val" id="mix-ncredit-out">—</span></div>
+          <div class="result-row"><span class="result-row-lbl">Species count</span><span class="result-row-val" id="mix-count-out">—</span></div>
+          <div class="result-row"><span class="result-row-lbl">Multi-species EQIP</span><span class="result-row-val" id="mix-eqip-out">—</span></div>
+        </div>
+      </div>
+      <div id="nrcs-mix-panel" class="nrcs-panel hidden">
+        <div class="nrcs-panel-head"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--amber-dk)" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span class="nrcs-panel-title">EQIP §340 — Mix Bonus</span></div>
+        <div class="nrcs-practice"><span class="nrcs-code">§340</span><span class="nrcs-name">Multi-Species Rate</span><span class="nrcs-rate" id="mix-multi-rate">—</span><p class="nrcs-note">2+ species earns multi-species rate (~$10–15/ac above single-species base in most NE states).</p></div>
+        <div class="nrcs-practice"><span class="nrcs-code">§328</span><span class="nrcs-name">Conservation Crop Rotation</span><span class="nrcs-rate">$10–35/ac</span><p class="nrcs-note">Often paired with 340. Requires 3+ crop rotation plan on file with NRCS.</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ TAB: ECONOMICS ════════════════════════ -->
+<div id="tab-econ" class="tab-pane hidden">
+  <div class="main-grid">
+    <div>
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Cover Crop Partial Budget</span>
+          <span class="panel-meta">Penn State / NRCS-Cartwright &amp; Kirwan methodology</span>
+        </div>
+        <div class="panel-body">
+          <div class="section-kicker"><span class="kicker-badge">Scenario</span>Choose cover crop end use</div>
+          <div class="toggle-group" style="margin-bottom:20px">
+            <button class="toggle-btn active" onclick="setScenario('terminated',this)">Terminated</button>
+            <button class="toggle-btn" onclick="setScenario('grazed',this)">Grazed</button>
+            <button class="toggle-btn" onclick="setScenario('baled',this)">Baled / Harvested</button>
+          </div>
+        </div>
+        <div class="panel-section">
+          <div class="section-kicker" style="color:var(--bad)"><span class="kicker-badge" style="background:var(--bad-bg);color:var(--bad);border-color:var(--bad-bdr)">Costs</span>▲ Added costs from cover cropping</div>
+          <div class="slider-wrap">
+            <div class="slider-header"><span class="slider-lbl">Seed Cost</span><span class="slider-val" style="color:var(--bad)">$<span id="e-seed-v">28</span>/ac</span></div>
+            <input type="range" id="e-seed" min="5" max="80" step="1" value="28" oninput="calcEcon()" style="--forest:var(--bad)">
+          </div>
+          <div class="slider-wrap" style="margin-top:14px">
+            <div class="slider-header"><span class="slider-lbl">Seeding (drilling or aerial)</span><span class="slider-val" style="color:var(--bad)">$<span id="e-seed2-v">12</span>/ac</span></div>
+            <input type="range" id="e-seed2" min="5" max="40" step="1" value="12" oninput="calcEcon()">
+          </div>
+          <div class="slider-wrap" style="margin-top:14px">
+            <div class="slider-header"><span class="slider-lbl">Termination (herbicide / rolling)</span><span class="slider-val" style="color:var(--bad)">$<span id="e-term-v">14</span>/ac</span></div>
+            <input type="range" id="e-term" min="0" max="40" step="1" value="14" oninput="calcEcon()">
+          </div>
+        </div>
+        <div class="panel-section">
+          <div class="section-kicker" style="color:var(--good)"><span class="kicker-badge" style="background:var(--good-bg);color:var(--good);border-color:var(--good-bdr)">Benefits</span>▼ Benefits &amp; reduced costs</div>
+          <div class="slider-wrap">
+            <div class="slider-header"><span class="slider-lbl">N Credit (lbs N/ac)</span><span class="slider-val">$<span id="e-nc-v">40</span> lbs</span></div>
+            <input type="range" id="e-nc" min="0" max="150" step="5" value="40" oninput="calcEcon()">
+          </div>
+          <div class="slider-wrap" style="margin-top:14px">
+            <div class="slider-header"><span class="slider-lbl">N Fertilizer Price ($/lb N)</span><span class="slider-val">$<span id="e-np-v">0.70</span>/lb</span></div>
+            <input type="range" id="e-np" min="0.30" max="1.50" step="0.05" value="0.70" oninput="calcEcon()">
+          </div>
+          <div class="slider-wrap" style="margin-top:14px">
+            <div class="slider-header"><span class="slider-lbl">Yield Change Following Crop (bu/ac)</span><span class="slider-val"><span id="e-yld-v">2</span> bu</span></div>
+            <input type="range" id="e-yld" min="-5" max="15" step="0.5" value="2" oninput="calcEcon()">
+          </div>
+          <div class="slider-wrap" style="margin-top:14px">
+            <div class="slider-header"><span class="slider-lbl">Cash Crop Price ($/bu)</span><span class="slider-val">$<span id="e-cp-v">5.50</span>/bu</span></div>
+            <input type="range" id="e-cp" min="3" max="12" step="0.25" value="5.50" oninput="calcEcon()">
+          </div>
+          <div id="econ-extra" class="hidden" style="margin-top:14px">
+            <div class="slider-wrap">
+              <div class="slider-header"><span class="slider-lbl" id="econ-extra-lbl">Grazing Value</span><span class="slider-val">$<span id="e-ex-v">45</span>/ac</span></div>
+              <input type="range" id="e-ex" min="0" max="200" step="5" value="45" oninput="calcEcon()">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Results sidebar -->
+    <div class="sidebar-sticky">
+      <div class="result-card">
+        <div class="result-kicker">Partial Budget Result</div>
+        <div class="result-big" id="e-net-out">—</div>
+        <div class="result-unit" id="e-net-lbl">net return per acre</div>
+        <div class="result-rows">
+          <div class="result-row"><span class="result-row-lbl">Total costs</span><span class="result-row-val" id="e-cost-out">—</span></div>
+          <div class="result-row"><span class="result-row-lbl">N credit value</span><span class="result-row-val" id="e-ncv-out">—</span></div>
+          <div class="result-row"><span class="result-row-lbl">Yield benefit</span><span class="result-row-val" id="e-yv-out">—</span></div>
+          <div class="result-row"><span class="result-row-lbl">Total benefits</span><span class="result-row-val" id="e-ben-out">—</span></div>
+        </div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-card" id="econ-card-no-eqip">
+          <div class="stat-card-num" id="e-noqip">—</div>
+          <div class="stat-card-lbl">Without EQIP</div>
+        </div>
+        <div class="stat-card" style="background:var(--warn-bg);border-color:var(--amber-rim)" id="econ-card-eqip">
+          <div class="stat-card-num amber" id="e-weqip">—</div>
+          <div class="stat-card-lbl">With §340 EQIP</div>
+        </div>
+      </div>
+      <div id="nrcs-econ-panel" class="nrcs-panel hidden">
+        <div class="nrcs-panel-head"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--amber-dk)" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span class="nrcs-panel-title">Applicable Practice Codes</span></div>
+        <div class="nrcs-practice"><span class="nrcs-code">§340</span><span class="nrcs-name">Cover Crop</span><span class="nrcs-rate" id="e-340-rate">$55/ac</span><p class="nrcs-note">Up to 5 years per land unit. Multi-species, organic, beginning farmer bonuses available.</p></div>
+        <div class="nrcs-practice"><span class="nrcs-code">§328</span><span class="nrcs-name">Cons. Crop Rotation</span><span class="nrcs-rate">$10–35/ac</span><p class="nrcs-note">Often bundled with 340 for soil health bonus.</p></div>
+        <div class="nrcs-practice" id="e-nrcs-grazing" style="display:none"><span class="nrcs-code">§528</span><span class="nrcs-name">Prescribed Grazing</span><span class="nrcs-rate">$3–15/ac</span><p class="nrcs-note">Required if cover crop is part of a grazing plan.</p></div>
+        <p style="font-size:10px;color:var(--amber-dk);margin-top:8px">Source: SARE Cover Crop Economics. NRCS EQIP. Cartwright &amp; Kirwan, USDA NRCS (MO/IL).</p>
+      </div>
+      <div class="panel" style="margin-top:0">
+        <div class="panel-body" style="font-size:11.5px;color:var(--dim);line-height:1.6">
+          <p>Long-term benefits — soil organic matter, water infiltration, biodiversity — not captured in this partial budget. Returns typically accelerate after year 3.</p>
+          <a href="https://www.sare.org/publications/cover-crop-economics/" target="_blank" class="ext-link" style="margin-top:8px;font-size:10px">SARE Cover Crop Economics →</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ TAB: NRCS REF ════════════════════════ -->
+<div id="tab-nrcs-ref" class="tab-pane hidden">
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-title">NRCS Practice Code Reference</span>
+      <span class="panel-meta">EQIP · CSP · FY 2024–25</span>
+    </div>
+    <div class="panel-body">
+      <div class="notice">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2" style="flex-shrink:0;margin-top:2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <p>Rates shown are approximate FY2024–25 for the state selected in the NRCS/EQIP bar above. Payment amounts vary by local resource concerns, IRA funding pools, and annual state determination. <strong>Always verify with your local NRCS field office before planning.</strong> Enable NRCS/EQIP toggle (top right) to select state and download state-specific CSV.</p>
+      </div>
+      <div id="nrcs-ref-table"></div>
+      <a href="https://www.nrcs.usda.gov/getting-assistance/payment-schedules" target="_blank" class="ext-link">NRCS Payment Schedules (official) →</a>
+      <a href="https://www.farmers.gov/conservation/eqip" target="_blank" class="ext-link" style="margin-left:10px">Apply for EQIP →</a>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><span class="panel-title">How to Apply for EQIP</span></div>
+    <div class="panel-body">
+      <ol style="font-size:13px;color:var(--dim);line-height:1.9;padding-left:20px">
+        <li>Contact your local USDA Service Center — <a href="https://www.farmers.gov" target="_blank" style="color:var(--forest)">farmers.gov</a></li>
+        <li>Submit Conservation Program Application (NRCS-CPA-1200) — accepted year-round</li>
+        <li>NRCS ranks applications by local resource concern priority; contracts awarded competitively</li>
+        <li>Approved producers sign contract and implement practices per schedule</li>
+        <li>Payment released upon NRCS verification of practice completion</li>
+        <li><strong>Beginning/underserved farmers:</strong> +25% payment rate and advance payment option (up to 50% before implementation)</li>
+        <li><strong>CSP (Conservation Stewardship Program):</strong> 5-year contracts covering a suite of practices including cover crops</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ TAB: RESOURCES ════════════════════════ -->
+<div id="tab-resources" class="tab-pane hidden">
+  <div class="panel">
+    <div class="panel-head"><span class="panel-title">Sources &amp; Attribution</span></div>
+    <div class="panel-body" id="resources-body"></div>
+  </div>
+  <div style="background:var(--forest);border-radius:var(--r-lg);padding:24px 32px;color:rgba(255,255,255,.75);font-size:13px;line-height:1.8;margin-top:20px">
+    <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:8px">Cover Crop OS — FarmHack Box</div>
+    <p>Data sources credited above. All species data, N-release methodology, economic frameworks, and NRCS practice information are drawn from publicly available research and extension resources. Not a substitute for site-specific agronomic advice. Consult your local Cornell Cooperative Extension or NRCS office for calibrated recommendations. OpenTEAM · CC BY-SA 4.0</p>
+    <div style="display:flex;gap:16px;margin-top:14px;flex-wrap:wrap">
+      <a href="https://northeastcovercrops.com" target="_blank" style="color:rgba(255,255,255,.5);font-family:'DM Mono',monospace;font-size:10px;text-decoration:none">northeastcovercrops.com</a>
+      <a href="https://covercrop-selector.org" target="_blank" style="color:rgba(255,255,255,.5);font-family:'DM Mono',monospace;font-size:10px;text-decoration:none">covercrop-selector.org</a>
+      <a href="https://covercrop-ncalc.org" target="_blank" style="color:rgba(255,255,255,.5);font-family:'DM Mono',monospace;font-size:10px;text-decoration:none">covercrop-ncalc.org</a>
+      <a href="https://www.sare.org" target="_blank" style="color:rgba(255,255,255,.5);font-family:'DM Mono',monospace;font-size:10px;text-decoration:none">sare.org</a>
+    </div>
+  </div>
+</div>
+
+</div><!-- /page-outer -->
+
+<footer class="footer">
+  <div class="footer-inner">
+    <span>Cover Crop OS · FarmHack Box · OpenTEAM · CC BY-SA 4.0</span>
+    <span>Data: NECCC · PSA · Cornell CCE · USDA NRCS · SARE</span>
+  </div>
+</footer>
+
+<script>
+// ═══════════════════════════ DATA ═══════════════════════════
+const SPECIES = [
+  {id:'c-rye',name:'Cereal Rye',family:'Grass',zones:[4,5,6,7],soils:['sandy','loam','clay'],drainage:['well','moderate','poor'],
+   goals:['erosion','biomass','weed','winter-kill'],cn:40,npct:1.1,biomass:4000,nfix:false,nrcs340:true,
+   rates:{d:'56–84',b:'84–112'},unit:'lbs/ac',
+   windows:{4:'Aug 15–Oct 1',5:'Sep 1–Oct 15',6:'Sep 15–Oct 31',7:'Oct 1–Nov 15'},
+   term:['herbicide','roller-crimp','tillage'],hard:'Excellent (all NE zones)',
+   note:'Most reliable winter cover. Excellent biomass. High C:N — slow N release, minimal credit. Standard for roller-crimp systems when mixed with vetch.'},
+  {id:'hairy-vetch',name:'Hairy Vetch',family:'Legume',zones:[5,6,7],soils:['sandy','loam'],drainage:['well','moderate'],
+   goals:['nitrogen','biomass','weed','forage'],cn:11,npct:3.8,biomass:3500,nfix:true,ncredit:80,nrcs340:true,
+   rates:{d:'20–30',b:'25–40'},unit:'lbs/ac',
+   windows:{5:'Aug 15–Sep 30',6:'Sep 1–Oct 15',7:'Sep 15–Nov 1'},
+   term:['herbicide','roller-crimp','tillage'],hard:'Good (zones 5–7)',
+   note:'Highest N fixing of common covers — 80–200 lbs N/ac. Vining habit. Most effective mixed with cereal rye (1:1 by weight). Terminate at rye anthesis.'},
+  {id:'red-clover',name:'Red Clover',family:'Legume',zones:[4,5,6,7],soils:['loam','clay'],drainage:['well','moderate'],
+   goals:['nitrogen','forage','erosion'],cn:16,npct:3.2,biomass:2000,nfix:true,ncredit:50,nrcs340:true,
+   rates:{d:'8–12',b:'12–16'},unit:'lbs/ac',
+   windows:{4:'Apr–Jun (interseeded)',5:'Apr–Jun',6:'Mar–Jun',7:'Mar–Jul'},
+   term:['herbicide','mowing','tillage'],hard:'Good — biennial',
+   note:'Classic nurse-crop interseeding into small grains. Biennial — survives winter, produces again year 2. 50–150 lbs N/ac total season.'},
+  {id:'crimson',name:'Crimson Clover',family:'Legume',zones:[6,7],soils:['loam','clay'],drainage:['well','moderate'],
+   goals:['nitrogen','forage'],cn:14,npct:3.5,biomass:2500,nfix:true,ncredit:60,nrcs340:true,
+   rates:{d:'15–20',b:'22–30'},unit:'lbs/ac',
+   windows:{6:'Aug 15–Sep 30',7:'Sep 1–Oct 15'},
+   term:['herbicide','mowing','roller-crimp'],hard:'Moderate — zones 6–7 only',
+   note:'Excellent pollinator habitat and N fixation. 60–120 lbs N/ac. Less winter-hardy than hairy vetch — marginal above zone 5.'},
+  {id:'fpeas',name:'Field Peas (Winter)',family:'Legume',zones:[5,6,7],soils:['loam','clay'],drainage:['well','moderate'],
+   goals:['nitrogen','biomass','forage'],cn:12,npct:3.5,biomass:2800,nfix:true,ncredit:70,nrcs340:true,
+   rates:{d:'80–120',b:'100–150'},unit:'lbs/ac',
+   windows:{5:'Aug 20–Sep 30',6:'Sep 1–Oct 15',7:'Sep 15–Nov 1'},
+   term:['herbicide','tillage','roller-crimp'],hard:'Moderate (variety dependent)',
+   note:'High N fixation, moderate winter hardiness. Austrian winter peas are most cold-hardy variety. Excellent in oats mix for winter-kill system.'},
+  {id:'oats',name:'Oats (Winter-Killed)',family:'Grass',zones:[5,6,7],soils:['sandy','loam'],drainage:['well','moderate'],
+   goals:['erosion','biomass','winter-kill'],cn:30,npct:1.8,biomass:2000,nfix:false,nrcs340:true,
+   rates:{d:'64–96',b:'96–128'},unit:'lbs/ac',
+   windows:{5:'Aug 1–Sep 15',6:'Aug 15–Oct 1',7:'Sep 1–Oct 15'},
+   term:['winter-kill','herbicide'],hard:'Poor — winter-kills zone 5+',
+   note:'Winter-kills at ~15°F creating ready mulch with no spring management. Ideal ahead of early-planted vegetables. Mix with field peas for N addition.'},
+  {id:'radish',name:'Tillage Radish',family:'Brassica',zones:[4,5,6,7],soils:['sandy','loam'],drainage:['well','moderate'],
+   goals:['compaction','erosion','winter-kill'],cn:16,npct:2.5,biomass:2000,nfix:false,nrcs340:true,
+   rates:{d:'8–12',b:'10–15'},unit:'lbs/ac',
+   windows:{4:'Aug 1–Sep 1',5:'Aug 1–Sep 15',6:'Aug 15–Oct 1',7:'Sep 1–Oct 15'},
+   term:['winter-kill','herbicide'],hard:'Poor — winter-kills most NE zones',
+   note:'Deep taproot (12–18") breaks up compaction layers. Winter-kills leaving decomposing hole. Do not plant if brassica clubroot or other disease history.'},
+  {id:'sunnhemp',name:'Sunn Hemp',family:'Legume',zones:[5,6,7],soils:['sandy','loam'],drainage:['well','moderate'],
+   goals:['nitrogen','biomass'],cn:10,npct:4.0,biomass:4000,nfix:true,ncredit:120,nrcs340:true,
+   rates:{d:'20–30',b:'25–40'},unit:'lbs/ac',
+   windows:{5:'Jun–Jul',6:'May–Aug',7:'May–Sep'},
+   term:['herbicide','mowing','frost'],hard:'None — summer annual; frost-kills',
+   note:'Very fast summer biomass — 6–8 ft in 60 days. Excellent nematode suppression. Frost-kills automatically. Ideal for summer gaps between spring and fall crops.'},
+  {id:'rye-vetch',name:'Cereal Rye + Hairy Vetch Mix',family:'Mix',zones:[5,6,7],soils:['sandy','loam','clay'],drainage:['well','moderate'],
+   goals:['nitrogen','biomass','weed','erosion'],cn:18,npct:2.8,biomass:4500,nfix:true,ncredit:60,nrcs340:true,
+   rates:{d:'56 rye + 20 vetch',b:'84 rye + 30 vetch'},unit:'lbs/ac',
+   windows:{5:'Aug 20–Sep 30',6:'Sep 1–Oct 15',7:'Sep 15–Nov 1'},
+   term:['roller-crimp','herbicide'],hard:'Good',
+   note:'Classic organic no-till roller-crimp system. Rye provides structure for vetch to climb. Terminate at rye anthesis for maximum weed suppression and N credit.'},
+  {id:'oats-peas',name:'Oats + Field Peas Mix',family:'Mix',zones:[5,6,7],soils:['loam','clay'],drainage:['well','moderate'],
+   goals:['nitrogen','biomass','winter-kill','forage'],cn:22,npct:2.5,biomass:3000,nfix:true,ncredit:40,nrcs340:true,
+   rates:{d:'48 oats + 60 peas',b:'64 oats + 80 peas'},unit:'lbs/ac',
+   windows:{5:'Aug 1–Sep 15',6:'Aug 15–Sep 30',7:'Sep 1–Oct 15'},
+   term:['winter-kill','herbicide'],hard:'Poor — winter-kills',
+   note:'Both species winter-kill together, leaving an N-enriched mulch mat for early spring vegetable establishment. Excellent fall forage if grazed before freeze.'},
+];
+
+const SPMAP = {};
+SPECIES.forEach(s=>SPMAP[s.id]=s);
+
+const MIX_SPECIES_OPTS = SPECIES.map(s=>`<option value="${s.id}">${s.name} (C:N ${s.cn}${s.nfix?' — N-fix':''})</option>`).join('');
+
+const NRCS_PRACTICES = [
+  {code:'340',name:'Cover Crop',cat:'Soil Health',unit:'ac',programs:'EQIP / CSP',
+   rate:'$34–$75/ac (state-specific; see NRCS/EQIP bar)',
+   desc:'Seeding adapted grasses, legumes, forbs for seasonal soil and water protection.',
+   concerns:['Soil erosion','Soil health','Water quality','Air quality'],
+   notes:'Eligible up to 5 yrs per land unit. Multi-species: +$10–15/ac. Organic: +25%. Beginning/underserved farmer: +25%. EQIP contracts typically 3-year. CSP: 5-year suite.'},
+  {code:'328',name:'Conservation Crop Rotation',cat:'Soil Health',unit:'ac/yr',programs:'EQIP / CSP',
+   rate:'$10–35/ac',
+   desc:'Growing crops in planned sequence to improve soil, break pest cycles, manage nutrients.',
+   concerns:['Soil health','Pest management','Soil erosion'],
+   notes:'Requires 3+ crop rotation plan. Often paired with 340. Higher CSP activity value for soil health improvement bundles.'},
+  {code:'329',name:'Residue & Tillage Mgmt (No-Till)',cat:'Soil Health',unit:'ac',programs:'EQIP / CSP',
+   rate:'$8–30/ac',
+   desc:'Managing residue and tillage to reduce soil disturbance and maintain cover.',
+   concerns:['Soil health','Soil erosion','Air quality','Water quality'],
+   notes:'Synergistic with cover crops. Frequently bundled with §340 in EQIP soil health applications.'},
+  {code:'345',name:'Residue & Tillage Mgmt (Reduced Till)',cat:'Soil Health',unit:'ac',programs:'EQIP / CSP',
+   rate:'$5–20/ac',
+   desc:'Managing tillage to maintain ≥30% residue cover after planting.',
+   concerns:['Soil erosion','Soil health'],
+   notes:'Stepping-stone toward no-till. Lower rate than 329.'},
+  {code:'590',name:'Nutrient Management',cat:'Soil Health',unit:'ac',programs:'EQIP / CSP',
+   rate:'$8–25/ac',
+   desc:'Managing timing, placement, and amount of plant nutrients to minimize environmental risk.',
+   concerns:['Water quality','Soil health','Air quality'],
+   notes:'Required for most soil health EQIP bundles. Cover crop N credit documented here. PSA CC-NCALC output accepted as documentation.'},
+  {code:'512',name:'Forage & Biomass Planting',cat:'Forage',unit:'ac',programs:'EQIP / CSP',
+   rate:'$40–120/ac',
+   desc:'Seeding adapted species for forage or biomass production (perennial establishment).',
+   concerns:['Soil health','Forage production','Wildlife habitat'],
+   notes:'Higher rate due to perennial establishment costs. Used for seeding renovations and new stand establishment.'},
+  {code:'528',name:'Prescribed Grazing',cat:'Forage',unit:'ac',programs:'EQIP / CSP',
+   rate:'$3–15/ac',
+   desc:'Managed grazing with defined use/rest periods to improve pasture condition.',
+   concerns:['Pasture condition','Water quality','Soil health'],
+   notes:'Required when cover crops are grazed as part of a grazing plan. Requires written prescribed grazing plan.'},
+  {code:'393',name:'Filter Strip',cat:'Water',unit:'ac',programs:'EQIP / CSP',
+   rate:'$150–400/ac (income foregone)',
+   desc:'Herbaceous vegetation strip between field and water body to reduce runoff.',
+   concerns:['Water quality','Riparian health'],
+   notes:'Often bundled with grassed waterway and cover crops in priority watersheds.'},
+  {code:'484',name:'Mulching',cat:'Soil Health',unit:'ac',programs:'EQIP / CSP',
+   rate:'$40–150/ac',
+   desc:'Applying plant residues to land surface to reduce erosion and conserve moisture.',
+   concerns:['Soil erosion','Soil health'],
+   notes:'Roller-crimped cover crops may qualify as mulch application in some states.'},
+];
+
+const RESOURCES_DATA = [
+  {name:'NECCC Cover Crop Species Selector',org:'Northeast Cover Crops Council / Precision Sustainable Agriculture',url:'https://covercrop-selector.org',
+   desc:'42-species interactive selector for NE hardiness zones 4–7. Filter by soil, drainage, goals, and cropping system. Basis for all species data in this tool.'},
+  {name:'CC-NCALC Cover Crop Nitrogen Calculator',org:'PSA / USDA ARS — Thapa et al. 2022; Mirsky et al. 2019',url:'https://covercrop-ncalc.org',
+   desc:'CERES N-mineralization model with live SSURGO soil and weather data. Public API at api.precisionsustainableag.org/cc-ncalc. Basis for N-release estimator methodology.'},
+  {name:'CSF Winter Cover Crop Planting Scheduler',org:'Cornell University — Climate Smart Farming Program',url:'http://climatesmartfarming.org/tools/csf-winter-cover-crop-planting-scheduler/',
+   desc:'Frost-date based planting window calculator by location. Updated annually with current frost records.'},
+  {name:'Cover Crop Tool for Vegetable Growers',org:'Cornell University Extension',url:'http://climatesmartfarming.org/tools/cover-crop-tool-for-vegetable-growers/',
+   desc:'Vegetable rotation-specific cover crop guidance from Cornell CSF.'},
+  {name:'Cover Crop Economic Decision Support Tool',org:'USDA NRCS — Lauren Cartwright & Bryon Kirwan',url:'https://www.nrcs.usda.gov/wps/portal/nrcs/mo/soils/health/',
+   desc:'Spreadsheet partial budget tool with short/long-term cost and benefit analysis. Methodology basis for economics tab.'},
+  {name:'Cover Crop Economics (SARE Publication)',org:'SARE Sustainable Agriculture Research & Education',url:'https://www.sare.org/publications/cover-crop-economics/',
+   desc:'Full publication including NRCS EQIP payment rate tables by state, payback period analysis, and 5-year return data.'},
+  {name:'EQIP Payment Schedules',org:'USDA NRCS',url:'https://www.nrcs.usda.gov/getting-assistance/payment-schedules',
+   desc:'Current annual state-by-state practice payment rates. Updated each October for the following fiscal year. Authoritative source for all EQIP rates.'},
+  {name:'Midwest Cover Crops Council Selector Tool',org:'MCCC / Michigan State University',url:'https://mccc.msu.edu/selector-tool/',
+   desc:'Expanded Midwest species database — useful for border states (OH, IN, IL, WI, MN).'},
+];
+
+// ═══════════════════════════ STATE ═══════════════════════════
+let nrcsOn = false;
+let ncTermMethod = 'surface';
+let econScenario = 'terminated';
+let mixComps = [{sp:'c-rye',rate:56},{sp:'hairy-vetch',rate:20}];
+
+// ═══════════════════════════ TABS ═══════════════════════════
+function switchTab(id, navEl, stepIdx) {
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.add('hidden'));
+  document.getElementById('tab-'+id).classList.remove('hidden');
+  // nav
+  document.querySelectorAll('.topbar-nav a').forEach(a=>a.classList.remove('active'));
+  if(navEl) navEl.classList.add('active');
+  else {
+    const navLinks = document.querySelectorAll('.topbar-nav a');
+    if(navLinks[stepIdx]) navLinks[stepIdx].classList.add('active');
+  }
+  // step rail
+  document.querySelectorAll('.step-item').forEach((s,i)=>{
+    s.classList.remove('active');
+    if(typeof stepIdx === 'number' && i === stepIdx) s.classList.add('active');
+  });
+}
+
+// ═══════════════════════════ NRCS ═══════════════════════════
+function toggleNRCS() {
+  nrcsOn = !nrcsOn;
+  document.getElementById('nrcs-toggle-btn').classList.toggle('on', nrcsOn);
+  document.getElementById('nrcs-bar').classList.toggle('visible', nrcsOn);
+  document.querySelectorAll('.nrcs-panel').forEach(p=>p.classList.toggle('hidden',!nrcsOn));
+  updateRate();
+}
+
+function getStateParts() {
+  const v = document.getElementById('state-sel').value.split(',');
+  return {code:v[0],single:+v[1],multi:+v[2],organic:+v[3],begin:+v[4]};
+}
+function getCurrentRate() {
+  const s = getStateParts();
+  const typeIdx = +document.getElementById('prod-sel').value;
+  return [s.single,s.multi,s.organic,s.begin][typeIdx];
+}
+function updateRate() {
+  const r = getCurrentRate();
+  document.getElementById('rate-display').textContent = '$'+r+'/ac';
+  document.querySelectorAll('[id$="-340-rate"]').forEach(el=>el.textContent='$'+r+'/ac ('+getStateParts().code+')');
+  const sp = getStateParts();
+  const multiEl = document.getElementById('mix-multi-rate');
+  if(multiEl) multiEl.textContent = '$'+sp.multi+'/ac ('+sp.code+')';
+  const econEl = document.getElementById('e-eqip-rate');
+  if(econEl) econEl.textContent = '$'+r+'/ac';
+  calcEcon();
+}
+
+function downloadCSV() {
+  const sp = getStateParts();
+  const typeLabels = ['Standard (single species)','Multi-species mix','Certified Organic','Beginning Farmer'];
+  const typeIdx = +document.getElementById('prod-sel').value;
+  const rows = [
+    ['Practice Code','Practice Name','Category','Programs','Unit','NRCS EQIP Rate Range','§340 Basic ('+sp.code+')','§340 Multi-species','§340 Organic','§340 Beginning Farmer','Resource Concerns','Notes'],
+    ...NRCS_PRACTICES.map(p=>[
+      p.code,p.name,p.cat,p.programs,p.unit,p.rate,
+      p.code==='340'?'$'+sp.single+'/ac':'—',
+      p.code==='340'?'$'+sp.multi+'/ac':'—',
+      p.code==='340'?'$'+sp.organic+'/ac':'—',
+      p.code==='340'?'$'+sp.begin+'/ac':'—',
+      p.concerns.join(' | '),p.notes
+    ])
+  ];
+  const csv = rows.map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob = new Blob([csv],{type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'nrcs-practices-covercrop-'+sp.code+'.csv';
+  a.click();
+}
+
+// ═══════════════════════════ SPECIES ═══════════════════════════
+function filterSpecies() {
+  const zone = +document.getElementById('f-zone').value;
+  const goal = document.getElementById('f-goal').value;
+  const soil = document.getElementById('f-soil').value;
+  const drain = document.getElementById('f-drain').value;
+  const results = SPECIES.filter(s=>
+    s.zones.includes(zone) && s.goals.includes(goal) &&
+    s.soils.includes(soil) && s.drainage.includes(drain)
+  );
+  const container = document.getElementById('species-results');
+  document.getElementById('sp-count').textContent = results.length + ' species match your criteria';
+  if(!results.length) {
+    container.innerHTML = '<div class="panel" style="grid-column:1/-1;padding:24px;text-align:center;color:var(--faint)">No species match all criteria. Try adjusting soil type or drainage.</div>';
+    return;
+  }
+  container.innerHTML = results.map(s=>`
+    <div class="species-card" onclick="showDetail('${s.id}')">
+      <div class="sp-name">${s.name}</div>
+      <div class="sp-meta">${s.family} · Zones ${s.zones.join(', ')} · C:N ${s.cn}:1 · N ${s.npct}%</div>
+      <div class="sp-note">${s.note}</div>
+      <div class="sp-pills">
+        ${s.nfix?'<span class="sp-pill green">N-fix ~'+s.ncredit+' lbs/ac</span>':''}
+        ${s.nrcs340&&nrcsOn?'<span class="sp-pill amber">§340 EQIP</span>':''}
+        ${s.goals.slice(0,3).map(g=>'<span class="sp-pill">'+g+'</span>').join('')}
+        ${s.windows[zone]?'<span class="sp-pill blue">Plant: '+s.windows[zone]+'</span>':''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function showDetail(id) {
+  const s = SPMAP[id];
+  const zone = document.getElementById('f-zone').value;
+  document.getElementById('sp-list-view').classList.add('hidden');
+  document.getElementById('sp-detail-view').classList.remove('hidden');
+  document.getElementById('sp-detail-content').innerHTML = `
+    <div class="panel" style="margin-bottom:20px">
+      <div class="panel-head">
+        <span class="panel-title">${s.name}</span>
+        <span class="panel-meta">${s.family} · Zones ${s.zones.join(', ')}</span>
+      </div>
+      <div class="panel-body">
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+          ${s.goals.map(g=>'<span class="sp-pill green">'+g+'</span>').join('')}
+          ${s.nfix?'<span class="sp-pill green">N-fix: ~'+s.ncredit+' lbs/ac</span>':''}
+          ${nrcsOn&&s.nrcs340?'<span class="sp-pill amber">§340 EQIP eligible</span>':''}
+        </div>
+        <p style="font-size:13.5px;color:var(--dim);line-height:1.65;margin-bottom:20px">${s.note}</p>
+        <div class="detail-grid">
+          <div class="detail-cell"><div class="detail-cell-lbl">Drilled Rate</div><div class="detail-cell-val big">${s.rates.d}</div><div class="detail-cell-lbl" style="margin-top:2px">${s.unit}</div></div>
+          <div class="detail-cell"><div class="detail-cell-lbl">Broadcast Rate</div><div class="detail-cell-val big">${s.rates.b}</div><div class="detail-cell-lbl" style="margin-top:2px">${s.unit}</div></div>
+          <div class="detail-cell"><div class="detail-cell-lbl">C:N Ratio</div><div class="detail-cell-val big">${s.cn}:1</div></div>
+          <div class="detail-cell"><div class="detail-cell-lbl">Typical Dry Biomass</div><div class="detail-cell-val big">${(s.biomass/1000).toFixed(1)}K</div><div class="detail-cell-lbl" style="margin-top:2px">lbs/ac</div></div>
+          <div class="detail-cell"><div class="detail-cell-lbl">N Content</div><div class="detail-cell-val big">${s.npct}%</div></div>
+          <div class="detail-cell"><div class="detail-cell-lbl">Winter Hardiness</div><div class="detail-cell-val" style="font-size:12px;font-family:'DM Sans';font-weight:500;color:var(--ink);margin-top:2px">${s.hard}</div></div>
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:10px;margin-top:4px">Planting Windows</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:16px">
+          ${Object.entries(s.windows).map(([z,w])=>`<div style="background:var(--cream);border:1px solid var(--line);border-radius:var(--r);padding:8px 12px"><div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--faint);margin-bottom:2px">Zone ${z}</div><div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600;color:var(--forest)">${w}</div></div>`).join('')}
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:8px">Termination Methods</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px">
+          ${s.term.map(t=>'<span class="sp-pill amber">'+t+'</span>').join('')}
+        </div>
+        <a href="https://covercrop-selector.org" target="_blank" class="green-cta">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          View in NECCC Species Selector Tool
+        </a>
+        ${nrcsOn&&s.nrcs340?`<div class="nrcs-panel" style="margin-top:16px"><div class="nrcs-panel-head"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--amber-dk)" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span class="nrcs-panel-title">NRCS §340 Cover Crop — ${getStateParts().code}</span></div><p class="nrcs-note">This species qualifies for EQIP Practice 340. Current ${getStateParts().code} rate: <strong style="color:var(--good)">$${getCurrentRate()}/ac</strong>. Rates increase for multi-species mixes, organic operations, and beginning/underserved farmers. Contact your local NRCS field office to apply.</p></div>`:''}
+      </div>
+    </div>
+  `;
+}
+
+function backToList() {
+  document.getElementById('sp-list-view').classList.remove('hidden');
+  document.getElementById('sp-detail-view').classList.add('hidden');
+}
+
+// ═══════════════════════════ N CALC ═══════════════════════════
+function setTerm(m) {
+  ncTermMethod = m;
+  document.getElementById('surf-btn').classList.toggle('active', m==='surface');
+  document.getElementById('inc-btn').classList.toggle('active', m==='incorporated');
+  calcN();
+}
+
+function calcN() {
+  const parts = document.getElementById('nc-species').value.split(',');
+  const cn = +parts[0], npct = +parts[1];
+  const biomass = +document.getElementById('nc-b').value;
+  const moist = +document.getElementById('nc-m').value;
+  const weeks = +document.getElementById('nc-w').value;
+  document.getElementById('nc-bv').textContent = biomass.toLocaleString();
+  document.getElementById('nc-mv').textContent = moist;
+  document.getElementById('nc-wv').textContent = weeks;
+  const dry = Math.round(biomass*(1-moist/100));
+  const avail = cn<15?0.75:cn<25?0.55:cn<35?0.35:0.20;
+  const incorp = ncTermMethod==='incorporated'?0.15:0;
+  const wkFactor = Math.min(1, weeks/12);
+  const nR = Math.round(dry*(npct/100)*(avail+incorp)*wkFactor*2000);
+  const nVal = Math.round(nR*0.70);
+  const cnLabel = cn<15?'Fast release':cn<25?'Moderate release':cn<35?'Slow release':'Very slow (grass)';
+  const timing = cn<15?'70-80% in 4-6 wks':cn<25?'50-60% in 6-8 wks':cn<35?'30-40% in 8-12 wks':'20-30% in 12+ wks';
+  document.getElementById('nc-n-out').textContent = nR;
+  document.getElementById('nc-dry').textContent = dry.toLocaleString()+' lbs/ac';
+  document.getElementById('nc-nval').textContent = '$'+nVal+'/ac';
+  document.getElementById('nc-cn').textContent = cn+':1 — '+cnLabel;
+  document.getElementById('nc-timing').textContent = timing;
+  document.getElementById('nc-credit').textContent = 'Subtract '+nR+' lbs N/ac';
+}
+
+// ═══════════════════════════ MIX ═══════════════════════════
+function renderMix() {
+  const c = document.getElementById('mix-comps');
+  c.innerHTML = mixComps.map((mc,i)=>`
+    <div class="mix-comp">
+      <div class="mix-comp-row">
+        <span class="mix-num">#${i+1}</span>
+        <select class="field-select" style="flex:1;font-size:12px" onchange="mixComps[${i}].sp=this.value;updateMixSummary()">
+          ${SPECIES.map(s=>`<option value="${s.id}"${s.id===mc.sp?' selected':''}>${s.name}</option>`).join('')}
+        </select>
+        <button class="mix-remove" onclick="mixComps.splice(${i},1);renderMix()">×</button>
+      </div>
+      <div class="slider-wrap">
+        <div class="slider-header">
+          <span class="slider-lbl">Seeding Rate</span>
+          <span class="slider-val" id="mix-rate-val-${i}">${mc.rate} lbs/ac</span>
+        </div>
+        <input type="range" min="1" max="150" step="1" value="${mc.rate}" oninput="mixComps[${i}].rate=+this.value;document.getElementById('mix-rate-val-${i}').textContent=this.value+' lbs/ac';updateMixSummary()">
+      </div>
+    </div>
+  `).join('');
+  updateMixSummary();
+}
+
+function addMixComp() {
+  mixComps.push({sp:'oats',rate:30});
+  renderMix();
+}
+
+function updateMixSummary() {
+  const total = mixComps.reduce((s,c)=>s+c.rate,0);
+  const blendCN = total?Math.round(mixComps.reduce((s,c)=>{const sp=SPMAP[c.sp];return s+((sp?sp.cn:30)*(c.rate/total));},0)):0;
+  const hasNfix = mixComps.some(c=>(SPMAP[c.sp]||{}).nfix);
+  const nEst = mixComps.reduce((s,c)=>{const sp=SPMAP[c.sp];return s+(sp&&sp.nfix?(sp.ncredit||50)*(c.rate/total):0);},0);
+  const isMulti = mixComps.length >= 2;
+  document.getElementById('mix-rate-out').textContent = total;
+  document.getElementById('mix-cn-out').textContent = blendCN+':1';
+  document.getElementById('mix-nfix-out').textContent = hasNfix?'Yes — N fixation':'None';
+  document.getElementById('mix-ncredit-out').textContent = hasNfix?'~'+Math.round(nEst)+' lbs N/ac':'0 (no legume)';
+  document.getElementById('mix-count-out').textContent = mixComps.length+' species';
+  document.getElementById('mix-eqip-out').textContent = isMulti?'Yes — multi-species rate':'No';
+  const sp2 = getStateParts();
+  const mrEl = document.getElementById('mix-multi-rate');
+  if(mrEl) mrEl.textContent = isMulti?'$'+sp2.multi+'/ac ('+sp2.code+')':'N/A — single species';
+}
+
+// ═══════════════════════════ ECON ═══════════════════════════
+function setScenario(s, btn) {
+  econScenario = s;
+  document.querySelectorAll('[onclick^="setScenario"]').forEach(b=>{
+    b.classList.remove('active');
+  });
+  if(btn) btn.classList.add('active');
+  const xRow = document.getElementById('econ-extra');
+  const grazeNRCS = document.getElementById('e-nrcs-grazing');
+  if(s !== 'terminated') {
+    xRow.classList.remove('hidden');
+    document.getElementById('econ-extra-lbl').textContent = s==='grazed'?'Grazing Value':'Baled Forage Value (net of harvest)';
+    document.getElementById('e-ex').value = s==='grazed'?45:60;
+    document.getElementById('e-ex-v').textContent = s==='grazed'?'45':'60';
+    if(grazeNRCS) grazeNRCS.style.display = s==='grazed'?'block':'none';
+  } else {
+    xRow.classList.add('hidden');
+    if(grazeNRCS) grazeNRCS.style.display = 'none';
+  }
+  calcEcon();
+}
+
+function calcEcon() {
+  const v = id=>+(document.getElementById(id)||{value:0}).value;
+  const seed=v('e-seed'), seed2=v('e-seed2'), term=v('e-term');
+  const nc=v('e-nc'), np=v('e-np'), yld=v('e-yld'), cp=v('e-cp');
+  const ex = econScenario!=='terminated'?v('e-ex'):0;
+  const costs = seed+seed2+term;
+  const nBen = Math.round(nc*np);
+  const yBen = Math.round(yld*cp);
+  const totalBen = nBen+yBen+ex;
+  const net = totalBen-costs;
+  const eqipRate = getCurrentRate();
+  const netEqip = net+eqipRate;
+  // update displays
+  ['e-seed-v','e-seed2-v','e-term-v'].forEach((id,i)=>{
+    const el=document.getElementById(id); if(el) el.textContent=[seed,seed2,term][i];
+  });
+  const ncEl=document.getElementById('e-nc-v');if(ncEl)ncEl.textContent=nc;
+  const npEl=document.getElementById('e-np-v');if(npEl)npEl.textContent=np.toFixed(2);
+  const yldEl=document.getElementById('e-yld-v');if(yldEl)yldEl.textContent=yld;
+  const cpEl=document.getElementById('e-cp-v');if(cpEl)cpEl.textContent=cp.toFixed(2);
+  const exEl=document.getElementById('e-ex-v');if(exEl)exEl.textContent=ex;
+  const fmt = n=>(n>=0?'+':'')+n;
+  document.getElementById('e-net-out').textContent = fmt(net);
+  document.getElementById('e-net-out').style.color = net>=0?'#fff':'#fca5a5';
+  document.getElementById('e-cost-out').textContent = '$'+costs+'/ac';
+  document.getElementById('e-ncv-out').textContent = '$'+nBen+'/ac';
+  document.getElementById('e-yv-out').textContent = '$'+yBen+'/ac';
+  document.getElementById('e-ben-out').textContent = '$'+totalBen+'/ac';
+  const noqEl=document.getElementById('e-noqip');
+  if(noqEl){noqEl.textContent=fmt(net);noqEl.style.color=net>=0?'var(--good)':'var(--bad)';}
+  const weqEl=document.getElementById('e-weqip');
+  if(weqEl){weqEl.textContent=fmt(netEqip);weqEl.style.color=netEqip>=0?'var(--amber)':'var(--bad)';}
+  const erEl=document.getElementById('e-340-rate');
+  if(erEl) erEl.textContent='$'+eqipRate+'/ac ('+getStateParts().code+')';
+}
+
+// ═══════════════════════════ NRCS REF TABLE ═══════════════════════════
+function renderNRCSTable() {
+  const sp = getStateParts();
+  document.getElementById('nrcs-ref-table').innerHTML = NRCS_PRACTICES.map(p=>`
+    <div style="background:var(--white);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px 20px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;flex-wrap:wrap;gap:8px">
+        <div>
+          <span style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:var(--amber-dk)">§${p.code}</span>
+          <span style="font-size:15px;font-weight:600;color:var(--ink);margin-left:8px">${p.name}</span>
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--faint);margin-left:8px;background:var(--cream-dk);padding:2px 7px;border-radius:4px">${p.cat}</span>
+        </div>
+        <div style="text-align:right">
+          <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:${p.code==='340'?'var(--good)':'var(--forest)'}">
+            ${p.code==='340'?'$'+sp.single+'/ac ('+sp.code+')':p.rate}
+          </div>
+          <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--faint)">${p.programs}</div>
+        </div>
+      </div>
+      <p style="font-size:13px;color:var(--dim);line-height:1.55;margin-bottom:8px">${p.desc}</p>
+      <p style="font-size:11.5px;color:var(--faint);line-height:1.5;margin-bottom:8px">${p.notes}</p>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">
+        ${p.concerns.map(c=>'<span class="sp-pill blue">'+c+'</span>').join('')}
+      </div>
+      ${p.code==='340'?`<div style="margin-top:10px;background:var(--forest-bg);border:1px solid var(--forest-rim);border-radius:var(--r);padding:8px 12px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+        <div style="text-align:center"><div style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--forest)">$${sp.single}/ac</div><div style="font-size:10px;color:var(--faint)">Standard</div></div>
+        <div style="text-align:center"><div style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--forest)">$${sp.multi}/ac</div><div style="font-size:10px;color:var(--faint)">Multi-species</div></div>
+        <div style="text-align:center"><div style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--forest)">$${sp.organic}/ac</div><div style="font-size:10px;color:var(--faint)">Organic</div></div>
+        <div style="text-align:center"><div style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--forest)">$${sp.begin}/ac</div><div style="font-size:10px;color:var(--faint)">Beginning</div></div>
+      </div>`:''}
+    </div>
+  `).join('');
+}
+
+function renderResources() {
+  document.getElementById('resources-body').innerHTML = RESOURCES_DATA.map(r=>`
+    <div class="citation">
+      <div class="citation-title">${r.name}</div>
+      <div class="citation-org">${r.org}</div>
+      <div class="citation-desc">${r.desc}</div>
+      <a href="${r.url}" target="_blank" class="citation-link">${r.url}</a>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════ INIT ═══════════════════════════
+filterSpecies();
+calcN();
+renderMix();
+calcEcon();
+renderNRCSTable();
+renderResources();
+</script>
+</body>
+</html>

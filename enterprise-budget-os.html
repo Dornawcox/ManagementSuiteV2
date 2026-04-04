@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enterprise Budget OS | FarmHack Box</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+<style>
+:root{--soil:#4a2c0e;--soil-md:#7a4a22;--soil-lt:#a06030;--soil-bg:#f5ede0;--soil-rim:#e0c4a0;--forest:#1e4d2b;--forest-bg:#eaf3ec;--forest-rim:#d0e8d6;--amber:#c47a2e;--amber-bg:#fff8ec;--amber-bdr:#f5d97e;--amber-dk:#8a5d00;--blue:#1a4f7a;--blue-bg:#dbeafe;--blue-rim:#93c5fd;--ink:#1a1a14;--cream:#f7f3ec;--cream-dk:#ede8df;--line:#ddd8ce;--line-dk:#b8b2a6;--dim:#6b6760;--faint:#9e9a93;--good:#1e6b3a;--good-bg:#d4edda;--good-bdr:#a3d4af;--bad:#8b1a1a;--bad-bg:#fee2e2;--bad-bdr:#fca5a5;--white:#fff;--r:8px;--r-lg:14px;--shadow:0 4px 24px rgba(74,44,14,.09),0 1px 4px rgba(74,44,14,.05)}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;font-size:15px;line-height:1.6;background:var(--cream);color:var(--ink);min-height:100vh}
+.topbar{position:sticky;top:0;z-index:200;background:var(--soil);border-bottom:2px solid #301a06;box-shadow:0 2px 16px rgba(0,0,0,.22)}
+.topbar-inner{max-width:1200px;margin:0 auto;padding:0 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;padding:13px 0;text-decoration:none;flex-shrink:0}
+.brand-icon{width:30px;height:30px;background:rgba(255,255,255,.12);border-radius:6px;display:flex;align-items:center;justify-content:center}
+.brand-name{font-family:'DM Mono',monospace;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#fff}
+.brand-sep{width:1px;height:20px;background:rgba(255,255,255,.2);margin:0 6px}
+.brand-sub{font-size:11.5px;color:rgba(255,255,255,.5)}
+.topbar-nav{display:flex}
+.topbar-nav a{font-family:'DM Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.55);text-decoration:none;padding:0 14px;height:56px;display:flex;align-items:center;gap:6px;border-left:1px solid rgba(255,255,255,.1);transition:color .12s,background .12s;cursor:pointer;position:relative}
+.topbar-nav a:hover{color:rgba(255,255,255,.9);background:rgba(255,255,255,.08)}
+.topbar-nav a.active{color:#fff;background:rgba(255,255,255,.12)}
+.topbar-nav a.active::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,.6)}
+.topbar-actions{display:flex;align-items:center;gap:8px}
+.topbar-btn{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;padding:6px 12px;border-radius:var(--r);border:1.5px solid rgba(255,255,255,.25);color:rgba(255,255,255,.7);background:none;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.topbar-btn:hover{border-color:rgba(255,255,255,.5);color:#fff}
+.topbar-btn.on{background:rgba(191,219,254,.18);border-color:#93c5fd;color:#bfdbfe}
+.topbar-btn.pos-btn{border-color:rgba(147,197,253,.4);color:rgba(147,197,253,.8)}
+.topbar-btn.pos-btn:hover,.topbar-btn.pos-btn.on{background:rgba(147,197,253,.18);border-color:#93c5fd;color:#bfdbfe}
+/* BARS */
+.nrcs-bar,.pos-panel{display:none}
+.nrcs-bar.visible{display:block;background:var(--amber-bg);border-bottom:2px solid var(--amber-bdr)}
+.pos-panel.visible{display:block;background:var(--blue-bg);border-bottom:2px solid var(--blue-rim)}
+.bar-inner{max-width:1200px;margin:0 auto;padding:11px 20px;display:flex;flex-wrap:wrap;align-items:center;gap:13px}
+.bar-label{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase}
+.bar-label.amber{color:var(--amber-dk)}
+.bar-label.blue{color:var(--blue)}
+.bar-select{font-family:'DM Sans',sans-serif;font-size:12px;color:var(--ink);background:var(--white);border-radius:6px;padding:5px 8px;outline:none}
+.bar-select.amber{border:1px solid var(--amber-bdr)}
+.bar-select.blue{border:1px solid var(--blue-rim)}
+.rate-chip{font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--good);background:var(--good-bg);border:1px solid var(--good-bdr);border-radius:20px;padding:3px 11px}
+.dl-btn,.sync-btn{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:5px 12px;border-radius:var(--r);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .15s}
+.dl-btn{border:1.5px solid var(--amber-bdr);color:var(--amber-dk);background:var(--white);margin-left:auto}
+.dl-btn:hover{background:var(--amber-bg)}
+.sync-btn{border:1.5px solid var(--blue-rim);color:var(--blue);background:var(--white);margin-left:auto}
+.sync-btn:hover{background:var(--blue-bg)}
+/* POS FIELDS */
+.pos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:7px;margin-top:10px}
+.pos-field{background:var(--white);border:1px solid var(--blue-rim);border-radius:var(--r);padding:7px 11px;display:flex;align-items:center;gap:8px;font-size:12px}
+.pos-badge{font-family:'DM Mono',monospace;font-size:8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:3px}
+.pos-badge.avail{background:var(--good-bg);color:var(--good);border:1px solid var(--good-bdr)}
+.pos-badge.soon{background:var(--cream-dk);color:var(--faint);border:1px solid var(--line)}
+/* PAGE */
+.page-outer{max-width:1200px;margin:0 auto;padding:26px 20px 80px}
+.hero{border-radius:var(--r-lg);padding:30px 38px;margin-bottom:22px;position:relative;overflow:hidden;color:#fff;background:linear-gradient(135deg,var(--soil) 0%,var(--soil-md) 60%,var(--soil-lt) 100%)}
+.hero::before{content:'';position:absolute;inset:0;background-image:radial-gradient(circle at 80% 20%,rgba(255,255,255,.07) 0%,transparent 55%);pointer-events:none}
+.hero-kicker{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:9px;display:flex;align-items:center;gap:8px}
+.hero-kicker::before{content:'';display:inline-block;width:20px;height:2px;background:rgba(255,255,255,.4)}
+.hero h1{font-family:'DM Serif Display',serif;font-size:clamp(20px,2.8vw,31px);font-weight:400;line-height:1.2;margin-bottom:7px}
+.hero h1 em{font-style:italic;color:rgba(255,255,255,.65)}
+.hero p{font-size:13.5px;color:rgba(255,255,255,.7);max-width:560px;line-height:1.6}
+.hero-pills{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}
+.hero-pill{font-family:'DM Mono',monospace;font-size:9.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:4px 11px;border-radius:20px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.7)}
+/* STEP RAIL */
+.step-rail{display:flex;background:var(--white);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;margin-bottom:20px;box-shadow:var(--shadow)}
+.step-item{flex:1;padding:10px 13px;display:flex;flex-direction:column;gap:2px;border-right:1px solid var(--line);cursor:pointer;transition:background .15s;position:relative}
+.step-item:last-child{border-right:none}
+.step-item:hover{background:var(--cream)}
+.step-item.active{background:var(--soil-bg)}
+.step-item.active::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--soil)}
+.step-num{width:19px;height:19px;background:var(--cream-dk);color:var(--dim);border-radius:50%;font-family:'DM Mono',monospace;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-bottom:2px;flex-shrink:0}
+.step-item.active .step-num{background:var(--soil);color:#fff}
+.step-label{font-family:'DM Mono',monospace;font-size:8.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.step-item.active .step-label{color:var(--soil)}
+.step-sub{font-size:10px;color:var(--faint)}
+/* PANELS */
+.panel{background:var(--white);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);overflow:hidden;margin-bottom:14px}
+.panel-head{padding:13px 18px;border-bottom:1px solid var(--line);background:linear-gradient(to right,var(--soil-bg),var(--white) 65%);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.panel-title{font-family:'DM Serif Display',serif;font-size:16px;font-weight:400;color:var(--soil)}
+.panel-meta{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.06em;color:var(--faint)}
+.panel-body{padding:16px 18px}
+.section-kicker{font-family:'DM Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.kicker-badge{padding:2px 7px;background:var(--soil-bg);color:var(--soil);border:1px solid var(--soil-rim);border-radius:4px;font-size:9px}
+/* GRID */
+.main-grid{display:grid;grid-template-columns:1fr 310px;gap:18px;align-items:start}
+.sidebar-sticky{position:sticky;top:66px}
+@media(max-width:860px){.main-grid{grid-template-columns:1fr}}
+/* FIELDS */
+.field-group{display:flex;flex-direction:column;gap:4px;margin-bottom:11px}
+.field-label{font-family:'DM Mono',monospace;font-size:9.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+.field-input,.field-select{font-family:'DM Sans',sans-serif;font-size:13.5px;color:var(--ink);background:var(--cream);border:1px solid var(--line);border-radius:6px;padding:7px 10px;width:100%;outline:none}
+.field-input:focus,.field-select:focus{border-color:var(--soil);background:#fff;box-shadow:0 0 0 3px var(--soil-bg)}
+/* RESULT */
+.result-card{background:var(--soil);border-radius:var(--r-lg);padding:17px 19px;color:#fff;margin-bottom:12px}
+.result-kicker{font-family:'DM Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:9px}
+.result-big{font-family:'DM Serif Display',serif;font-size:42px;line-height:1;margin-bottom:3px}
+.result-big.good{color:#86efac}
+.result-big.bad{color:#fca5a5}
+.result-unit{font-size:12px;color:rgba(255,255,255,.55);margin-bottom:12px}
+.result-rows{display:flex;flex-direction:column}
+.result-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px}
+.result-row:last-child{border-bottom:none}
+.result-row-lbl{color:rgba(255,255,255,.6)}
+.result-row-val{font-family:'DM Mono',monospace;font-weight:600;color:#fff}
+.result-row-val.green{color:#86efac}
+.result-row-val.amber{color:#fcd34d}
+.result-row-val.red{color:#fca5a5}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.stat-card{background:var(--cream);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;text-align:center}
+.stat-card.amber-bg{background:var(--amber-bg);border-color:var(--amber-bdr)}
+.stat-num{font-family:'DM Serif Display',serif;font-size:20px;color:var(--soil);line-height:1.1}
+.stat-num.good{color:var(--good)}
+.stat-num.bad{color:var(--bad)}
+.stat-num.amber{color:var(--amber)}
+.stat-lbl{font-family:'DM Mono',monospace;font-size:8.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);margin-top:2px}
+/* CAT NAV */
+.cat-nav{display:flex;gap:6px;margin-bottom:13px;flex-wrap:wrap}
+.cat-btn{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:6px 14px;border-radius:20px;border:1.5px solid var(--line);color:var(--dim);background:var(--white);cursor:pointer;transition:all .15s}
+.cat-btn.active{background:var(--soil);color:#fff;border-color:var(--soil)}
+.cat-btn:hover:not(.active){border-color:var(--soil-lt);color:var(--soil)}
+/* BUDGET CARD */
+.budget-card{background:var(--white);border:1px solid var(--line);border-radius:var(--r-lg);padding:13px 15px;cursor:pointer;transition:all .15s;margin-bottom:7px;display:flex;align-items:center;gap:13px}
+.budget-card:hover{border-color:var(--soil-lt);box-shadow:var(--shadow)}
+.budget-card.active{border-color:var(--soil);background:var(--soil-bg)}
+.bc-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px}
+.bc-info{flex:1;min-width:0}
+.bc-name{font-family:'DM Serif Display',serif;font-size:15px;color:var(--ink)}
+.bc-meta{font-family:'DM Mono',monospace;font-size:9px;color:var(--faint);letter-spacing:.02em;margin-top:1px}
+.bc-nums{display:flex;gap:13px;flex-shrink:0}
+.bc-stat{text-align:right}
+.bc-stat-num{font-family:'DM Mono',monospace;font-size:13px;font-weight:700}
+.bc-stat-lbl{font-family:'DM Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint)}
+/* SCALE BAR */
+.scale-bar{background:var(--soil-bg);border:1px solid var(--soil-rim);border-radius:var(--r);padding:10px 15px;margin-bottom:12px;display:flex;align-items:center;gap:13px;flex-wrap:wrap}
+.scale-lbl{font-family:'DM Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--soil);white-space:nowrap}
+.scale-input{font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:var(--soil);background:var(--white);border:1px solid var(--soil-rim);border-radius:6px;padding:4px 10px;width:90px;outline:none;text-align:center}
+.scale-input:focus{border-color:var(--soil)}
+.scale-unit{font-family:'DM Mono',monospace;font-size:11px;color:var(--soil-md)}
+.scale-preview{font-family:'DM Mono',monospace;font-size:11px;color:var(--dim);margin-left:auto;text-align:right}
+/* LINE ITEM TABLE */
+.li-table{width:100%;border-collapse:collapse;table-layout:fixed}
+.li-section-head{background:var(--cream-dk);padding:7px 10px 7px 38px;display:flex;align-items:center;justify-content:space-between}
+.li-section-lbl{font-family:'DM Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.li-row-wrap{border-bottom:1px solid var(--cream-dk)}
+.li-row-wrap:last-child{border-bottom:none}
+.li-main-row{display:flex;align-items:stretch}
+.li-expand{display:flex;align-items:center;justify-content:center;width:36px;min-height:40px;background:none;border:none;border-right:1px solid var(--cream-dk);cursor:pointer;color:var(--faint);flex-shrink:0;transition:all .15s}
+.li-expand:hover{background:var(--soil-bg);color:var(--soil)}
+.li-expand.open{color:var(--soil)}
+.li-expand svg{width:11px;height:11px;transition:transform .2s}
+.li-expand.open svg{transform:rotate(90deg)}
+.li-label-cell{flex:1;padding:8px 10px;min-width:0}
+.li-label-text{font-size:13px;color:var(--ink);line-height:1.3}
+.li-formula-text{font-family:'DM Mono',monospace;font-size:10px;color:var(--faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.li-pos-tag{display:inline-flex;align-items:center;gap:3px;font-family:'DM Mono',monospace;font-size:8px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:1px 5px;border-radius:3px;background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-rim);margin-left:5px;cursor:default;vertical-align:middle}
+.li-val-cell{font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:var(--ink);padding:8px 10px;text-align:right;white-space:nowrap;flex-shrink:0;min-width:80px;display:flex;align-items:center;justify-content:flex-end}
+/* ASSUMPTION PANEL */
+.li-assume{display:none;background:var(--soil-bg);border-top:1px solid var(--soil-rim);padding:11px 13px 13px 38px}
+.li-assume.open{display:block}
+.assume-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:9px;margin-bottom:9px}
+.assume-field{display:flex;flex-direction:column;gap:3px}
+.assume-lbl{font-family:'DM Mono',monospace;font-size:9px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);display:flex;align-items:center;gap:5px}
+.assume-wrap{display:flex;align-items:stretch}
+.assume-input{font-family:'DM Mono',monospace;font-size:13px;color:var(--ink);background:var(--white);border:1px solid var(--soil-rim);border-radius:5px 0 0 5px;padding:5px 8px;width:100%;outline:none;min-width:0}
+.assume-input:focus{border-color:var(--soil)}
+.assume-unit-lbl{font-family:'DM Mono',monospace;font-size:9.5px;font-weight:600;color:var(--dim);background:var(--cream-dk);border:1px solid var(--soil-rim);border-left:none;border-radius:0 5px 5px 0;padding:5px 7px;white-space:nowrap;flex-shrink:0;display:flex;align-items:center}
+.assume-result{font-family:'DM Mono',monospace;font-size:10.5px;color:var(--soil);font-weight:600;margin-top:5px}
+/* SUBTOTAL ROWS */
+.li-subtotal-row{display:flex;align-items:center;padding:7px 10px 7px 38px;background:var(--cream-dk)}
+.li-subtotal-lbl{font-family:'DM Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);flex:1}
+.li-subtotal-val{font-family:'DM Mono',monospace;font-size:13px;font-weight:700;min-width:80px;text-align:right}
+.li-total-row{display:flex;align-items:center;padding:10px 10px 10px 38px;background:var(--soil-bg);border-top:2px solid var(--soil-rim)}
+.li-total-lbl{font-family:'DM Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--soil);flex:1}
+.li-total-val{font-family:'DM Mono',monospace;font-size:16px;font-weight:700;min-width:80px;text-align:right}
+/* TOGGLE GROUP */
+.toggle-group{display:flex;gap:0;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:12px}
+.toggle-btn{flex:1;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:8px 4px;border:none;background:var(--white);color:var(--dim);cursor:pointer;transition:all .15s;border-right:1px solid var(--line)}
+.toggle-btn:last-child{border-right:none}
+.toggle-btn:hover{background:var(--cream);color:var(--ink)}
+.toggle-btn.active{background:var(--soil);color:#fff}
+/* NRCS PANEL */
+.nrcs-panel{background:var(--amber-bg);border:1px solid var(--amber-bdr);border-radius:var(--r-lg);padding:13px;margin-top:12px}
+.nrcs-panel-title{font-family:'DM Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--amber-dk);display:flex;align-items:center;gap:6px;margin-bottom:9px}
+.nrcs-code-row{padding:7px 0;border-bottom:1px solid rgba(196,122,46,.2);display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.nrcs-code-row:last-child{border-bottom:none}
+.nrcs-code-lbl{font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--amber-dk)}
+.nrcs-code-name{font-size:12px;color:var(--ink);margin-left:5px;font-weight:600}
+.nrcs-code-note{font-size:11px;color:var(--dim);margin-top:2px;line-height:1.4}
+.nrcs-code-rate{font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--good);white-space:nowrap;flex-shrink:0}
+/* PB */
+.pb-card{background:var(--white);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px 17px;margin-bottom:11px;box-shadow:var(--shadow)}
+.pb-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.pb-card-title{font-family:'DM Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase}
+.pb-card-title.adds{color:var(--good)}
+.pb-card-title.costs{color:var(--bad)}
+.pb-subtotal{font-family:'DM Mono',monospace;font-size:13px;font-weight:700}
+.pb-row{display:flex;gap:5px;align-items:center;margin-bottom:6px}
+.pb-row input[type=text]{flex:1;font-family:'DM Sans',sans-serif;font-size:12.5px;background:var(--cream);border:1px solid var(--line);border-radius:5px;padding:5px 8px;outline:none;color:var(--ink)}
+.pb-row input[type=text]:focus{border-color:var(--soil);background:#fff}
+.pb-row input[type=number]{width:85px;font-family:'DM Mono',monospace;font-size:13px;background:var(--cream);border:1px solid var(--line);border-radius:5px;padding:5px 6px;text-align:right;outline:none;color:var(--ink);flex-shrink:0}
+.pb-row input[type=number]:focus{border-color:var(--soil);background:#fff}
+.pb-remove{border:none;background:none;color:var(--faint);cursor:pointer;font-size:16px;padding:0 3px;line-height:1;flex-shrink:0}
+.pb-remove:hover{color:var(--bad)}
+.add-row-btn{font-family:'DM Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;border:2px dashed var(--line-dk);border-radius:var(--r);padding:7px 12px;color:var(--faint);background:none;cursor:pointer;transition:all .15s;width:100%;margin-top:3px}
+.add-row-btn:hover{border-color:var(--soil-lt);color:var(--soil);background:var(--soil-bg)}
+/* MISC */
+.divider{height:1px;background:var(--line);margin:12px 0}
+.notice{background:var(--blue-bg);border:1px solid var(--blue-rim);border-radius:var(--r);padding:10px 12px;display:flex;gap:8px;align-items:flex-start;margin-bottom:12px}
+.notice p{font-size:12px;color:var(--blue);line-height:1.5}
+.ext-link{display:inline-flex;align-items:center;gap:5px;font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.04em;color:var(--soil);text-decoration:none;padding:5px 11px;border:1px solid var(--soil-rim);border-radius:var(--r);background:var(--soil-bg);transition:all .15s;margin-top:7px;margin-right:6px}
+.ext-link:hover{background:var(--soil);color:#fff}
+.sp-pill{display:inline-block;font-family:'DM Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:20px;margin-right:4px}
+.sp-pill.amber{background:var(--amber-bg);color:var(--amber-dk);border:1px solid var(--amber-bdr)}
+.citation{background:var(--cream);border-left:3px solid var(--soil-lt);border-radius:0 var(--r) var(--r) 0;padding:9px 12px;margin-bottom:8px}
+.citation-title{font-size:13px;font-weight:600;color:var(--ink);margin-bottom:1px}
+.citation-org{font-family:'DM Mono',monospace;font-size:10px;color:var(--soil);margin-bottom:3px}
+.citation-desc{font-size:12px;color:var(--dim);line-height:1.5}
+.citation-link{font-family:'DM Mono',monospace;font-size:10px;color:var(--soil);text-decoration:none}
+.citation-link:hover{text-decoration:underline}
+.hidden{display:none!important}
+.footer{background:var(--soil);color:rgba(255,255,255,.5);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.05em;padding:13px 20px;margin-top:40px}
+.footer-inner{max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="index.html">
+      <div class="brand-icon"><svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+      <span class="brand-name">Enterprise Budget OS</span><span class="brand-sep"></span><span class="brand-sub">FarmHack Box · Farm Finance</span>
+    </a>
+    <nav class="topbar-nav">
+      <a onclick="switchTab('library',this,0)" class="active">Budget Library</a>
+      <a onclick="switchTab('partial',this,1)">Partial Budget</a>
+      <a onclick="switchTab('nrcs-ref',this,2)">NRCS Codes</a>
+      <a onclick="switchTab('resources',this,3)">Sources</a>
+    </nav>
+    <div class="topbar-actions">
+      <button class="topbar-btn pos-btn" id="pos-btn" onclick="togglePOS()">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        POS Sync
+      </button>
+      <button class="topbar-btn" id="nrcs-btn" onclick="toggleNRCS()">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        NRCS/EQIP
+      </button>
+    </div>
+  </div>
+</header>
+<!-- POS PANEL -->
+<div class="pos-panel" id="pos-panel">
+  <div class="bar-inner">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+    <span class="bar-label blue" style="font-size:11px">FarmHack Box POS — Data Field Mapping</span>
+    <button class="sync-btn" onclick="posSync()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Sync Latest Data</button>
+  </div>
+  <div style="max-width:1200px;margin:0 auto;padding:0 20px 12px">
+    <div class="pos-grid">
+      <div class="pos-field"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--good)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Commodity sale prices<span class="pos-badge avail" style="margin-left:auto">Live</span></div>
+      <div class="pos-field"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--good)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Livestock weights (scale)<span class="pos-badge avail" style="margin-left:auto">Live</span></div>
+      <div class="pos-field"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--good)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Input purchase costs<span class="pos-badge avail" style="margin-left:auto">Live</span></div>
+      <div class="pos-field"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--good)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Labor hours logged<span class="pos-badge avail" style="margin-left:auto">Live</span></div>
+      <div class="pos-field"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--good)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Headcount / inventory<span class="pos-badge avail" style="margin-left:auto">Live</span></div>
+      <div class="pos-field">Yield records (FMIS)<span class="pos-badge soon" style="margin-left:auto">Roadmap</span></div>
+      <div class="pos-field">Fertilizer apps (FMIS)<span class="pos-badge soon" style="margin-left:auto">Roadmap</span></div>
+      <div class="pos-field">Fuel usage (sensor)<span class="pos-badge soon" style="margin-left:auto">Roadmap</span></div>
+    </div>
+    <p style="font-size:11.5px;color:var(--blue);margin-top:9px;line-height:1.55">Fields marked <strong>Live</strong> will populate assumption inputs automatically when POS sync is active. Inputs marked <span class="li-pos-tag">⟳ POS</span> update on sync. Connect FarmHack Box POS at <strong>farmhack.local/pos/api</strong> or enable in Suite Settings.</p>
+  </div>
+</div>
+<!-- NRCS BAR -->
+<div class="nrcs-bar" id="nrcs-bar">
+  <div class="bar-inner">
+    <span class="bar-label amber">State</span>
+    <select class="bar-select amber" id="state-sel" onchange="updateRate()">
+      <option value="NY,55,66,69,69">New York</option><option value="PA,52,62,65,65">Pennsylvania</option>
+      <option value="VT,60,72,75,75">Vermont</option><option value="ME,65,78,81,81">Maine</option>
+      <option value="NH,62,74,78,78">New Hampshire</option><option value="MA,65,76,81,81">Massachusetts</option>
+      <option value="NJ,58,70,73,73">New Jersey</option><option value="MD,54,65,68,68">Maryland</option>
+      <option value="OH,50,60,63,63">Ohio</option><option value="MI,54,65,68,68">Michigan</option>
+      <option value="IL,62,74,78,78">Illinois</option><option value="WI,54,65,68,68">Wisconsin</option>
+      <option value="IA,34,50,43,43">Iowa</option><option value="MN,50,60,63,63">Minnesota</option>
+      <option value="MO,50,60,63,63">Missouri</option><option value="VA,50,60,63,63">Virginia</option>
+      <option value="NC,50,60,63,63">North Carolina</option><option value="KY,48,58,60,60">Kentucky</option>
+    </select>
+    <span class="bar-label amber">Type</span>
+    <select class="bar-select amber" id="prod-sel" onchange="updateRate()">
+      <option value="0">Standard (single species)</option><option value="1">Multi-species mix</option>
+      <option value="2">Certified Organic</option><option value="3">Beginning Farmer</option>
+    </select>
+    <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--amber-dk)">§340 Rate:</span>
+    <span class="rate-chip" id="rate-chip">$55/ac</span>
+    <button class="dl-btn" onclick="downloadCSV()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download CSV</button>
+  </div>
+</div>
+<div class="page-outer">
+<div class="hero">
+  <div class="hero-kicker">ISU AgDecisionMaker · Penn State Extension · Cornell CCE · USDA NRCS</div>
+  <h1>Enterprise Budget <em>Decision Tools</em></h1>
+  <p>Formula-driven enterprise budgets with fully editable assumptions — adjust weight, price, rate, and quantity independently for each line item. Syncs with FarmHack Box POS for live market data.</p>
+  <div class="hero-pills"><span class="hero-pill">14 enterprise templates</span><span class="hero-pill">Editable assumptions</span><span class="hero-pill">POS data sync</span><span class="hero-pill">Operation scale</span><span class="hero-pill">NRCS §340 §512 §528</span></div>
+</div>
+<div class="step-rail">
+  <div class="step-item active" onclick="switchTab('library',null,0)"><div class="step-num">1</div><div class="step-label">Budget Library</div><div class="step-sub">14 templates</div></div>
+  <div class="step-item" onclick="switchTab('partial',null,1)"><div class="step-num">2</div><div class="step-label">Partial Budget</div><div class="step-sub">Decision tool</div></div>
+  <div class="step-item" onclick="switchTab('nrcs-ref',null,2)"><div class="step-num">3</div><div class="step-label">NRCS Codes</div><div class="step-sub">EQIP / CSP</div></div>
+  <div class="step-item" onclick="switchTab('resources',null,3)"><div class="step-num">4</div><div class="step-label">Sources</div><div class="step-sub">Attribution</div></div>
+</div>
+<!-- TAB: LIBRARY -->
+<div id="tab-library" class="tab-pane">
+  <div class="main-grid">
+    <div>
+      <div class="cat-nav">
+        <button class="cat-btn active" onclick="setCat('crops',this)">🌾 Field Crops</button>
+        <button class="cat-btn" onclick="setCat('livestock',this)">🐄 Livestock</button>
+        <button class="cat-btn" onclick="setCat('vegetables',this)">🥬 Vegetables</button>
+      </div>
+      <div id="budget-list"></div>
+      <div id="budget-detail-panel"></div>
+    </div>
+    <div class="sidebar-sticky" id="budget-sidebar">
+      <div class="panel"><div class="panel-body" style="text-align:center;color:var(--faint);padding:26px 16px"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--line-dk)" stroke-width="1.5" style="margin-bottom:9px"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><p style="font-size:13px">Select an enterprise to view and edit its budget assumptions</p></div></div>
+    </div>
+  </div>
+</div>
+<!-- TAB: PARTIAL -->
+<div id="tab-partial" class="tab-pane hidden">
+  <div class="main-grid">
+    <div>
+      <div class="panel">
+        <div class="panel-head"><span class="panel-title">Partial Budget Tool</span><span class="panel-meta">Penn State — Harper et al.</span></div>
+        <div class="panel-body">
+          <div class="section-kicker"><span class="kicker-badge">Decision</span>Management change being evaluated</div>
+          <div class="field-group" style="margin-bottom:14px">
+            <label class="field-label">Proposed Change</label>
+            <input type="text" class="field-input" id="pb-decision" value="Add cover cropping to corn rotation">
+          </div>
+          <div class="notice"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" style="flex-shrink:0;margin-top:2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p>Partial budgeting evaluates only the <strong>changes</strong> caused by the proposed decision. Net change = (Added Returns + Reduced Costs) − (Added Costs + Reduced Returns).</p></div>
+        </div>
+      </div>
+      <div class="pb-card"><div class="pb-card-head"><span class="pb-card-title adds">▲ (1) Added Returns — new income from the change</span><span class="pb-subtotal" style="color:var(--good)" id="pb-ar-total">$0</span></div><div id="pb-ar"></div><button class="add-row-btn" onclick="addPBRow('ar')">+ Add line item</button></div>
+      <div class="pb-card"><div class="pb-card-head"><span class="pb-card-title adds">▼ (2) Reduced Costs — existing costs eliminated</span><span class="pb-subtotal" style="color:var(--good)" id="pb-rc-total">$0</span></div><div id="pb-rc"></div><button class="add-row-btn" onclick="addPBRow('rc')">+ Add line item</button></div>
+      <div class="pb-card"><div class="pb-card-head"><span class="pb-card-title costs">▲ (3) Added Costs — new costs from the change</span><span class="pb-subtotal" style="color:var(--bad)" id="pb-ac-total">$0</span></div><div id="pb-ac"></div><button class="add-row-btn" onclick="addPBRow('ac')">+ Add line item</button></div>
+      <div class="pb-card"><div class="pb-card-head"><span class="pb-card-title costs">▼ (4) Reduced Returns — existing income lost</span><span class="pb-subtotal" style="color:var(--bad)" id="pb-rr-total">$0</span></div><div id="pb-rr"></div><button class="add-row-btn" onclick="addPBRow('rr')">+ Add line item</button></div>
+    </div>
+    <div class="sidebar-sticky">
+      <div class="result-card"><div class="result-kicker">Net Change to Profit</div><div class="result-big" id="pb-net-big">$0</div><div class="result-unit">per unit</div><div class="result-rows"><div class="result-row"><span class="result-row-lbl">(1) Added Returns</span><span class="result-row-val green" id="pb-r-ar">$0</span></div><div class="result-row"><span class="result-row-lbl">(2) Reduced Costs</span><span class="result-row-val green" id="pb-r-rc">$0</span></div><div class="result-row"><span class="result-row-lbl">(3) Added Costs</span><span class="result-row-val red" id="pb-r-ac">$0</span></div><div class="result-row"><span class="result-row-lbl">(4) Reduced Returns</span><span class="result-row-val red" id="pb-r-rr">$0</span></div></div></div>
+      <div class="stat-grid"><div class="stat-card"><div class="stat-num" id="pb-stat-no">$0</div><div class="stat-lbl">Without EQIP</div></div><div class="stat-card amber-bg"><div class="stat-num amber" id="pb-stat-yes">$0</div><div class="stat-lbl">With §340 EQIP</div></div></div>
+      <div id="nrcs-partial" class="nrcs-panel hidden"><div class="nrcs-panel-title"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--amber-dk)" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Add EQIP to Partial Budget</div><p style="font-size:11.5px;color:var(--amber-dk);margin-bottom:7px">Current §340 rate: <strong id="pb-340-rate">$55/ac</strong></p><button onclick="addEQIPToPB()" style="font-family:'DM Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:6px 12px;border-radius:var(--r);border:1.5px solid var(--amber-bdr);color:var(--amber-dk);background:var(--white);cursor:pointer">+ Add EQIP §340 to Returns</button></div>
+      <div class="panel" style="margin-top:0"><div class="panel-body" style="font-size:12px;color:var(--dim);line-height:1.7"><div id="pb-interp">Enter line items above to analyze the decision.</div><div class="divider"></div><p style="font-size:11px;color:var(--faint)">Source: Penn State Extension — "Budgeting for Agricultural Decision Making" (Harper, Hyde et al.).</p></div></div>
+    </div>
+  </div>
+</div>
+<!-- TAB: NRCS -->
+<div id="tab-nrcs-ref" class="tab-pane hidden">
+  <div class="panel"><div class="panel-head"><span class="panel-title">NRCS Practice Code Reference</span><span class="panel-meta">EQIP · CSP · FY 2024–25</span></div>
+    <div class="panel-body">
+      <div class="notice"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" style="flex-shrink:0;margin-top:2px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p>Approximate FY2024–25. Enable NRCS/EQIP bar to select your state and see §340 rates. <a href="https://www.nrcs.usda.gov/getting-assistance/payment-schedules" target="_blank" style="color:var(--blue);font-weight:600">Official payment schedules →</a></p></div>
+      <div id="nrcs-list"></div>
+      <a href="https://www.nrcs.usda.gov/getting-assistance/payment-schedules" target="_blank" class="ext-link">NRCS Payment Schedules →</a>
+      <a href="https://www.farmers.gov/conservation/eqip" target="_blank" class="ext-link">Apply for EQIP →</a>
+    </div>
+  </div>
+</div>
+<!-- TAB: RESOURCES -->
+<div id="tab-resources" class="tab-pane hidden">
+  <div class="panel"><div class="panel-head"><span class="panel-title">Sources &amp; Attribution</span></div><div class="panel-body" id="resources-body"></div></div>
+  <div style="background:var(--soil);border-radius:var(--r-lg);padding:22px 28px;color:rgba(255,255,255,.75);font-size:13px;line-height:1.8;margin-top:14px"><div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:7px">Enterprise Budget OS — FarmHack Box · OpenTEAM · CC BY-SA 4.0</div><p>Budget values are regional benchmarks. Actual farm results vary. Not financial advice — consult your county Extension farm business management specialist for farm-specific analysis.</p></div>
+</div>
+</div>
+<footer class="footer"><div class="footer-inner"><span>Enterprise Budget OS · FarmHack Box · OpenTEAM · CC BY-SA 4.0</span><span>ISU AgDecisionMaker · Penn State Extension · Cornell CCE · USDA NRCS</span></div></footer>
+<script>
+// DATA MODEL — each assumption has: id, label, value, unit, step, min, max, posSource (optional)
+const A=(id,label,value,unit,step,min,max,pos)=>({id,label,value,step:step||1,min:min||0,max:max||999999,unit,pos:pos||null});
+const BUDGETS={
+  crops:[
+    {id:'corn',name:'Field Corn',unit:'ac',icon:'🌽',col:'#c47a2e',
+     src:'ISU AgDecisionMaker A1-20 (2025). Adjusted for NE.',nrcs:['340','328','329','590'],
+     scale:{label:'Acres',value:100,unit:'ac'},
+     income:[
+       {id:'grain',label:'Corn grain',pos:'grain_price',
+        asm:[A('yield','Yield',180,'bu/ac',5,50,400),A('price','Market price',4.50,'$/bu',0.05,2,15,'grain_price')],
+        calc:a=>a.yield*a.price,fstr:a=>`${a.yield} bu/ac × $${a.price.toFixed(2)}/bu`},
+       {id:'ins',label:'Crop insurance indemnity (avg)',
+        asm:[A('v','Indemnity value',25,'$/ac',1,0,300)],
+        calc:a=>a.v,fstr:a=>`$${a.v}/ac`}
+     ],
+     varCosts:[
+       {id:'seed',label:'Seed',asm:[A('bags','Bags per acre',0.33,'bags/ac',0.01,0.1,1),A('price','Price per bag',365,'$/bag',5,200,600)],calc:a=>a.bags*a.price,fstr:a=>`${a.bags} bags × $${a.price}/bag`},
+       {id:'nfert',label:'Nitrogen fertilizer',asm:[A('rate','N rate',160,'lbs N/ac',5,0,300),A('price','N price',0.70,'$/lb N',0.05,0.3,1.5,'input_costs')],calc:a=>a.rate*a.price,fstr:a=>`${a.rate} lbs N × $${a.price.toFixed(2)}/lb`},
+       {id:'pk',label:'P+K fertilizer',asm:[A('v','P+K cost',45,'$/ac',1,0,150,'input_costs')],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'herb',label:'Herbicides',asm:[A('v','Cost',48,'$/ac',1,0,200,'input_costs')],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'ins2',label:'Crop insurance premium',asm:[A('v','Premium',28,'$/ac',1,0,150)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'dry',label:'Drying & hauling',asm:[A('pts','Pts to dry',3,'pts',0.5,0,10),A('rate','$/pt/bu',0.04,'$/pt/bu',0.005,0,0.15),A('yield','Yield',180,'bu/ac',5,50,400),A('haul','Hauling',12,'$/ac',1,0,40)],calc:a=>(a.pts*a.rate*a.yield)+a.haul,fstr:a=>`${a.pts}pts × $${a.rate}/pt × ${a.yield}bu + $${a.haul} haul`},
+       {id:'labor',label:'Field labor',pos:'labor_rate',asm:[A('hrs','Hours per acre',2.5,'hrs/ac',0.25,0,10),A('wage','Wage rate',18,'$/hr',1,12,50,'labor_rate')],calc:a=>a.hrs*a.wage,fstr:a=>`${a.hrs} hrs × $${a.wage}/hr`},
+       {id:'fuel',label:'Fuel & lube',asm:[A('v','Fuel & lube',32,'$/ac',1,0,100)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'repair',label:'Machine repair',asm:[A('v','Repair cost',20,'$/ac',1,0,80)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'cc',label:'Cover crop (§340 eligible)',asm:[A('seed','Seed',28,'$/ac',1,0,80),A('seedg','Seeding',12,'$/ac',1,0,40),A('term','Termination',14,'$/ac',1,0,40)],calc:a=>a.seed+a.seedg+a.term,fstr:a=>`$${a.seed} seed + $${a.seedg} seeding + $${a.term} term`}
+     ],
+     fixCosts:[
+       {id:'land',label:'Land charge / cash rent',asm:[A('rent','Cash rent',180,'$/ac',5,0,600,'land_cost')],calc:a=>a.rent,fstr:a=>`$${a.rent}/ac`},
+       {id:'mach',label:'Machinery depreciation',asm:[A('v','Mach. depr.',65,'$/ac',1,0,200)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'int',label:'Operating interest',asm:[A('v','Interest',18,'$/ac',1,0,80)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`}
+     ]
+    },
+    {id:'soy',name:'Soybeans',unit:'ac',icon:'🫘',col:'#2a6338',
+     src:'ISU AgDecisionMaker A1-20, OSU Enterprise Budget (2025).',nrcs:['340','328','329','590'],
+     scale:{label:'Acres',value:100,unit:'ac'},
+     income:[
+       {id:'beans',label:'Soybean grain',pos:'soy_price',asm:[A('yield','Yield',50,'bu/ac',2,20,80),A('price','Market price',11.00,'$/bu',0.25,5,20,'soy_price')],calc:a=>a.yield*a.price,fstr:a=>`${a.yield} bu/ac × $${a.price.toFixed(2)}/bu`},
+       {id:'ins',label:'Crop insurance indemnity',asm:[A('v','Indemnity',18,'$/ac',1,0,200)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`}
+     ],
+     varCosts:[
+       {id:'seed',label:'Seed (certified)',asm:[A('units','Units/ac',0.115,'units/ac',0.005,0.05,0.3),A('price','Price/unit',565,'$/unit',5,250,900)],calc:a=>a.units*a.price,fstr:a=>`${a.units} units × $${a.price}/unit`},
+       {id:'pk',label:'Fertilizer (P+K)',asm:[A('v','P+K cost',55,'$/ac',1,0,150,'input_costs')],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'herb',label:'Herbicides',asm:[A('v','Cost',58,'$/ac',1,0,200,'input_costs')],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'ins2',label:'Crop insurance premium',asm:[A('v','Premium',22,'$/ac',1,0,100)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'haul',label:'Hauling',asm:[A('yield','Yield',50,'bu/ac',2,20,80),A('rate','$/bu',0.24,'$/bu',0.01,0.1,0.5)],calc:a=>a.yield*a.rate,fstr:a=>`${a.yield} bu × $${a.rate.toFixed(2)}/bu`},
+       {id:'labor',label:'Field labor',pos:'labor_rate',asm:[A('hrs','Hours/ac',1.5,'hrs/ac',0.25,0,8),A('wage','Wage rate',18,'$/hr',1,12,50,'labor_rate')],calc:a=>a.hrs*a.wage,fstr:a=>`${a.hrs} hrs × $${a.wage}/hr`},
+       {id:'fuel',label:'Fuel & lube',asm:[A('v','Fuel & lube',24,'$/ac',1,0,80)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'repair',label:'Machine repair',asm:[A('v','Repair',15,'$/ac',1,0,60)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'cc',label:'Cover crop (§340 eligible)',asm:[A('seed','Seed',28,'$/ac',1,0,80),A('seedg','Seeding',12,'$/ac',1,0,40),A('term','Term.',14,'$/ac',1,0,40)],calc:a=>a.seed+a.seedg+a.term,fstr:a=>`$${a.seed} seed + $${a.seedg} seeding + $${a.term} term`}
+     ],
+     fixCosts:[
+       {id:'land',label:'Land charge',asm:[A('rent','Cash rent',160,'$/ac',5,0,500,'land_cost')],calc:a=>a.rent,fstr:a=>`$${a.rent}/ac`},
+       {id:'mach',label:'Machinery depr.',asm:[A('v','Depr.',55,'$/ac',1,0,150)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'int',label:'Interest',asm:[A('v','Interest',12,'$/ac',1,0,50)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`}
+     ]
+    },
+    {id:'cc-ent',name:'Cover Crop (enterprise)',unit:'ac',icon:'🌿',col:'#1e4d2b',
+     src:'NRCS EQIP §340 cost basis. SARE Cover Crop Economics 2020.',nrcs:['340','590','528'],
+     scale:{label:'Acres enrolled',value:100,unit:'ac'},
+     income:[
+       {id:'ncred',label:'N credit from legume cover',asm:[A('lbs','N credit',40,'lbs N/ac',5,0,150),A('price','N price',0.70,'$/lb N',0.05,0.3,1.5)],calc:a=>a.lbs*a.price,fstr:a=>`${a.lbs} lbs N × $${a.price.toFixed(2)}/lb`},
+       {id:'yield',label:'Yield improvement — following crop',asm:[A('yield','Yield gain',2,'bu/ac',0.5,-5,15),A('price','Crop price',5.50,'$/bu',0.25,2,15,'grain_price')],calc:a=>a.yield*a.price,fstr:a=>`${a.yield} bu/ac × $${a.price.toFixed(2)}/bu`},
+       {id:'eqip',label:'EQIP §340 payment (enter state rate)',asm:[A('rate','§340 rate',55,'$/ac',1,0,100)],calc:a=>a.rate,fstr:a=>`$${a.rate}/ac — update from NRCS bar`},
+       {id:'graze',label:'Grazing value (if applicable)',asm:[A('v','Grazing value',0,'$/ac',5,0,150)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`}
+     ],
+     varCosts:[
+       {id:'seed',label:'Seed cost',asm:[A('v','Seed',28,'$/ac',1,5,80,'input_costs')],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'seedg',label:'Seeding (drilling or aerial)',asm:[A('v','Seeding',12,'$/ac',1,0,40)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'term',label:'Termination (herbicide or rolling)',asm:[A('v','Termination',14,'$/ac',1,0,40)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`}
+     ],
+     fixCosts:[
+       {id:'equip',label:'Equipment share',asm:[A('v','Equipment share',12,'$/ac',1,0,50)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`}
+     ]
+    }
+  ],
+  livestock:[
+    {id:'stocker',name:'Stocker Cattle',unit:'head',icon:'🐄',col:'#7a4a22',
+     src:'ISU AgDecisionMaker, Pasture Project grazing calculators.',nrcs:['528','340','382','614'],
+     scale:{label:'Head on operation',value:50,unit:'head'},
+     income:[
+       {id:'sale',label:'Cattle sale',pos:'livestock_price',
+        asm:[A('saleWt','Sale weight',750,'lbs/head',10,300,1400,'livestock_weights'),A('price','Sale price',1.65,'$/lb',0.01,0.50,4.00,'livestock_price')],
+        calc:a=>a.saleWt*a.price,fstr:a=>`${a.saleWt} lbs × $${a.price.toFixed(2)}/lb`}
+     ],
+     varCosts:[
+       {id:'purchase',label:'Cattle purchase',pos:'livestock_price',asm:[A('buyWt','Purchase weight',500,'lbs/head',10,200,900,'livestock_weights'),A('price','Purchase price',1.80,'$/lb',0.01,0.50,4.00,'livestock_price')],calc:a=>a.buyWt*a.price,fstr:a=>`${a.buyWt} lbs × $${a.price.toFixed(2)}/lb`},
+       {id:'pasture',label:'Pasture rental',asm:[A('aud','AUD per head',120,'AUD/head',5,30,365),A('rate','Grazing rate',0.30,'$/AUD',0.01,0.05,1.50)],calc:a=>a.aud*a.rate,fstr:a=>`${a.aud} AUD × $${a.rate.toFixed(2)}/AUD`},
+       {id:'ccgraze',label:'Cover crop grazing',asm:[A('aud','AUD on cover crop',40,'AUD/head',5,0,120),A('rate','Grazing rate',0.45,'$/AUD',0.01,0.10,2.00)],calc:a=>a.aud*a.rate,fstr:a=>`${a.aud} AUD × $${a.rate.toFixed(2)}/AUD`},
+       {id:'vet',label:'Veterinary & health',asm:[A('v','Vet cost',30,'$/head',1,0,100)],calc:a=>a.v,fstr:a=>`$${a.v}/head`},
+       {id:'min',label:'Salt & mineral',asm:[A('days','Days on feed',180,'days',5,30,365),A('rate','Mineral cost',0.07,'$/day',0.01,0.01,0.30)],calc:a=>a.days*a.rate,fstr:a=>`${a.days} days × $${a.rate.toFixed(2)}/day`},
+       {id:'labor',label:'Labor',pos:'labor_rate',asm:[A('hrs','Hours per head',3,'hrs/head',0.25,0,20),A('wage','Wage rate',18,'$/hr',1,12,50,'labor_rate')],calc:a=>a.hrs*a.wage,fstr:a=>`${a.hrs} hrs × $${a.wage}/hr`},
+       {id:'mkt',label:'Marketing & shrink',asm:[A('v','Marketing cost',15,'$/head',1,0,60)],calc:a=>a.v,fstr:a=>`$${a.v}/head`}
+     ],
+     fixCosts:[
+       {id:'equip',label:'Equipment & facilities',asm:[A('v','Fixed share',18,'$/head',1,0,80)],calc:a=>a.v,fstr:a=>`$${a.v}/head`},
+       {id:'int',label:'Interest on purchase',asm:[A('buyWt','Buy weight',500,'lbs/head',10,200,900),A('price','Buy price',1.80,'$/lb',0.01,0.50,4.00),A('rate','Interest rate',7,'%',0.25,0,20),A('mo','Months',6,'mo',1,1,12)],calc:a=>(a.buyWt*a.price)*(a.rate/100)*(a.mo/12),fstr:a=>`(${a.buyWt}lbs × $${a.price.toFixed(2)}) × ${a.rate}% × ${a.mo}/12`}
+     ]
+    },
+    {id:'cowcalf',name:'Cow-Calf',unit:'cow-calf unit',icon:'🐄',col:'#5c2c0e',
+     src:'ISU AgDecisionMaker B1-21 (2025). Adjusted for NE grazing.',nrcs:['528','512','382','614','393'],
+     scale:{label:'Breeding cows',value:100,unit:'cows'},
+     income:[
+       {id:'calfsale',label:'Calf sales',pos:'livestock_price',asm:[A('weanRate','Weaning rate',92,'%',1,50,105),A('calfWt','Weaning weight',550,'lbs',10,300,800,'livestock_weights'),A('price','Calf price',1.80,'$/lb',0.01,0.50,4.00,'livestock_price')],calc:a=>(a.weanRate/100)*a.calfWt*a.price,fstr:a=>`${a.weanRate}% weaning × ${a.calfWt} lbs × $${a.price.toFixed(2)}/lb`},
+       {id:'cullcow',label:'Cull cow sales',asm:[A('cullRate','Cull rate',20,'%/yr',1,10,40),A('cowWt','Cull cow weight',1100,'lbs',25,600,1800,'livestock_weights'),A('price','Cull price',0.90,'$/lb',0.01,0.30,2.00,'livestock_price')],calc:a=>(a.cullRate/100)*a.cowWt*a.price,fstr:a=>`${a.cullRate}% × ${a.cowWt} lbs × $${a.price.toFixed(2)}/lb`}
+     ],
+     varCosts:[
+       {id:'hay',label:'Hay feed',asm:[A('tons','Hay per cow',4,'T/cow',0.25,1,8),A('price','Hay price',140,'$/T',5,50,350,'input_costs')],calc:a=>a.tons*a.price,fstr:a=>`${a.tons} T × $${a.price}/T`},
+       {id:'supp',label:'Grain, minerals, salt',asm:[A('v','Feed supplements',120,'$/cow',5,20,400,'input_costs')],calc:a=>a.v,fstr:a=>`$${a.v}/cow`},
+       {id:'pasture',label:'Pasture charge',asm:[A('mo','Grazing months',6,'mo',0.5,0,12),A('rate','Pasture rate',30,'$/AUM',1,5,100)],calc:a=>a.mo*a.rate,fstr:a=>`${a.mo} mo × $${a.rate}/AUM`},
+       {id:'vet',label:'Veterinary & health',asm:[A('v','Vet cost',60,'$/cow',1,10,200)],calc:a=>a.v,fstr:a=>`$${a.v}/cow`},
+       {id:'bull',label:'Bull service',asm:[A('ratio','Cows per bull',20,'cows/bull',1,10,50),A('cost','Bull annual cost',1500,'$/bull/yr',50,500,5000)],calc:a=>a.cost/a.ratio,fstr:a=>`$${a.cost}/bull ÷ ${a.ratio} cows/bull`},
+       {id:'labor',label:'Labor',pos:'labor_rate',asm:[A('hrs','Hours per cow',15,'hrs/cow',1,2,40),A('wage','Wage rate',18,'$/hr',1,12,50,'labor_rate')],calc:a=>a.hrs*a.wage,fstr:a=>`${a.hrs} hrs × $${a.wage}/hr`},
+       {id:'misc',label:'Fuel, equipment, marketing',asm:[A('v','Misc. variable',80,'$/cow',5,20,200)],calc:a=>a.v,fstr:a=>`$${a.v}/cow`}
+     ],
+     fixCosts:[
+       {id:'cowdepr',label:'Cow depreciation',asm:[A('cost','Heifer cost',1200,'$/head',50,500,3500),A('life','Productive life',8,'yrs',1,4,15)],calc:a=>a.cost/a.life,fstr:a=>`$${a.cost} ÷ ${a.life} yr life`},
+       {id:'int',label:'Interest on cow value',asm:[A('cowVal','Avg cow value',1100,'$/head',50,300,3500),A('rate','Interest rate',7,'%',0.25,0,20)],calc:a=>a.cowVal*(a.rate/100),fstr:a=>`$${a.cowVal} × ${a.rate}%`},
+       {id:'fac',label:'Facilities depreciation',asm:[A('v','Facility depr.',40,'$/cow',1,0,150)],calc:a=>a.v,fstr:a=>`$${a.v}/cow`},
+       {id:'land',label:'Land charge',asm:[A('ac','Acres per cow',1.8,'ac/cow',0.1,0.5,8),A('rent','Land rental',80,'$/ac',5,20,300,'land_cost')],calc:a=>a.ac*a.rent,fstr:a=>`${a.ac} ac × $${a.rent}/ac`}
+     ]
+    },
+    {id:'sheep',name:'Ewe Flock',unit:'ewe unit',icon:'🐑',col:'#4a5568',
+     src:'ISU AgDecisionMaker B1-21, Montana State Enterprise Budget.',nrcs:['528','512','382','614'],
+     scale:{label:'Head in flock',value:50,unit:'ewes'},
+     income:[
+       {id:'lambs',label:'Lamb sales',asm:[A('lambCrop','Lamb crop %',160,'%',5,80,250),A('wt','Market weight',110,'lbs',5,60,180,'livestock_weights'),A('price','Lamb price',1.90,'$/lb',0.01,0.50,5.00,'livestock_price')],calc:a=>(a.lambCrop/100)*a.wt*a.price,fstr:a=>`${a.lambCrop}% lamb crop × ${a.wt} lbs × $${a.price.toFixed(2)}/lb`},
+       {id:'cull',label:'Cull ewe sales',asm:[A('cullRate','Culling rate',20,'%/yr',1,10,35),A('wt','Ewe weight',150,'lbs',5,80,250,'livestock_weights'),A('price','Cull price',0.80,'$/lb',0.01,0.20,2.00,'livestock_price')],calc:a=>(a.cullRate/100)*a.wt*a.price,fstr:a=>`${a.cullRate}% × ${a.wt} lbs × $${a.price.toFixed(2)}/lb`},
+       {id:'wool',label:'Wool',asm:[A('lbs','Wool per ewe',8,'lbs/ewe',0.5,3,15),A('price','Wool price',0.80,'$/lb',0.05,0.20,4.00,'livestock_price')],calc:a=>a.lbs*a.price,fstr:a=>`${a.lbs} lbs × $${a.price.toFixed(2)}/lb`}
+     ],
+     varCosts:[
+       {id:'hay',label:'Hay feed',asm:[A('lbs','Hay per ewe',250,'lbs/ewe',10,50,600),A('price','Hay price',140,'$/T',5,50,350,'input_costs')],calc:a=>(a.lbs/2000)*a.price,fstr:a=>`${a.lbs} lbs × $${a.price}/T`},
+       {id:'grain',label:'Grain (finishing)',asm:[A('v','Grain/supplement',45,'$/ewe',1,0,120,'input_costs')],calc:a=>a.v,fstr:a=>`$${a.v}/ewe`},
+       {id:'pasture',label:'Pasture charge',asm:[A('mo','Grazing months',6,'mo',0.5,0,12),A('rate','Rate',10,'$/ewe/mo',1,2,40)],calc:a=>a.mo*a.rate,fstr:a=>`${a.mo} mo × $${a.rate}/ewe/mo`},
+       {id:'vet',label:'Veterinary & health',asm:[A('v','Vet cost',25,'$/ewe',1,5,80)],calc:a=>a.v,fstr:a=>`$${a.v}/ewe`},
+       {id:'shear',label:'Shearing',asm:[A('v','Shearing cost',8,'$/ewe',1,4,25)],calc:a=>a.v,fstr:a=>`$${a.v}/ewe`},
+       {id:'labor',label:'Labor',pos:'labor_rate',asm:[A('hrs','Hours per ewe',8,'hrs/ewe',0.5,1,25),A('wage','Wage rate',18,'$/hr',1,12,50,'labor_rate')],calc:a=>a.hrs*a.wage,fstr:a=>`${a.hrs} hrs × $${a.wage}/hr`},
+       {id:'mkt',label:'Marketing',asm:[A('v','Marketing',12,'$/ewe',1,0,40)],calc:a=>a.v,fstr:a=>`$${a.v}/ewe`}
+     ],
+     fixCosts:[
+       {id:'depr',label:'Ewe depreciation',asm:[A('cost','Ewe cost',200,'$/head',10,80,600),A('life','Life',5,'yrs',1,3,10)],calc:a=>a.cost/a.life,fstr:a=>`$${a.cost} ÷ ${a.life} yr`},
+       {id:'int',label:'Interest',asm:[A('val','Ewe value',200,'$/head',10,50,600),A('rate','Rate',7,'%',0.25,0,20)],calc:a=>a.val*(a.rate/100),fstr:a=>`$${a.val} × ${a.rate}%`},
+       {id:'fac',label:'Facilities',asm:[A('v','Facilities depr.',20,'$/ewe',1,0,80)],calc:a=>a.v,fstr:a=>`$${a.v}/ewe`},
+       {id:'land',label:'Land charge',asm:[A('v','Land charge',45,'$/ewe',1,10,150,'land_cost')],calc:a=>a.v,fstr:a=>`$${a.v}/ewe`}
+     ]
+    },
+    {id:'layers',name:'Laying Hens',unit:'hen',icon:'🥚',col:'#7c5c1c',
+     src:'Cornell Small Farms Program, Penn State Poultry Enterprise Budgets.',nrcs:['590'],
+     scale:{label:'Hens in flock',value:200,unit:'hens'},
+     income:[
+       {id:'eggs',label:'Egg sales',pos:'grain_price',asm:[A('doz','Dozen/hen/yr',23,'doz/hen',1,10,30),A('price','Price/dozen',5.50,'$/doz',0.25,1.50,20.00,'grain_price')],calc:a=>a.doz*a.price,fstr:a=>`${a.doz} doz/yr × $${a.price.toFixed(2)}/doz`},
+       {id:'culls',label:'Culled hen sales',asm:[A('v','Cull value',8,'$/hen',1,0,30,'livestock_price')],calc:a=>a.v,fstr:a=>`$${a.v}/hen`}
+     ],
+     varCosts:[
+       {id:'feed',label:'Feed',asm:[A('lbs','Feed/hen/yr',100,'lbs/hen',5,60,150),A('price','Feed price',0.35,'$/lb',0.01,0.15,0.80,'input_costs')],calc:a=>a.lbs*a.price,fstr:a=>`${a.lbs} lbs × $${a.price.toFixed(2)}/lb`},
+       {id:'bed',label:'Bedding',asm:[A('v','Bedding cost',8,'$/hen',0.5,0,30)],calc:a=>a.v,fstr:a=>`$${a.v}/hen`},
+       {id:'vet',label:'Veterinary',asm:[A('v','Vet cost',5,'$/hen',0.5,0,20)],calc:a=>a.v,fstr:a=>`$${a.v}/hen`},
+       {id:'labor',label:'Labor',pos:'labor_rate',asm:[A('min','Min/hen/day',0.15,'min/hen/day',0.01,0.05,0.5),A('days','Days/year',365,'days',1,300,366),A('wage','Wage rate',18,'$/hr',1,12,50,'labor_rate')],calc:a=>(a.min/60)*a.days*a.wage,fstr:a=>`${a.min} min/day × ${a.days} days × $${a.wage}/hr`},
+       {id:'pack',label:'Packaging',asm:[A('doz','Doz/hen/yr',23,'doz',1,10,30),A('price','Carton cost',0.25,'$/carton',0.01,0.10,0.80)],calc:a=>a.doz*a.price,fstr:a=>`${a.doz} doz × $${a.price.toFixed(2)}/carton`},
+       {id:'mkt',label:'Marketing & direct sales',asm:[A('v','Marketing',8,'$/hen',0.5,0,40)],calc:a=>a.v,fstr:a=>`$${a.v}/hen`}
+     ],
+     fixCosts:[
+       {id:'housing',label:'Housing depreciation',asm:[A('cost','Housing cost',500,'$/hen capacity',10,100,2000),A('life','Building life',20,'yrs',1,10,40)],calc:a=>a.cost/a.life,fstr:a=>`$${a.cost}/hen ÷ ${a.life} yr`},
+       {id:'equip',label:'Equipment depr.',asm:[A('v','Equipment depr.',8,'$/hen',0.5,0,40)],calc:a=>a.v,fstr:a=>`$${a.v}/hen`},
+       {id:'int',label:'Interest',asm:[A('v','Interest',4,'$/hen',0.25,0,20)],calc:a=>a.v,fstr:a=>`$${a.v}/hen`}
+     ]
+    }
+  ],
+  vegetables:[
+    {id:'tomato',name:'Tomatoes (fresh market)',unit:'ac',icon:'🍅',col:'#c0392b',
+     src:'Cornell High Tunnels Sample Budgets. Direct market pricing.',nrcs:['340','590','441','449'],
+     scale:{label:'Acres in production',value:2,unit:'ac'},
+     income:[
+       {id:'toms',label:'Fresh tomato sales',asm:[A('yield','Marketable yield',15000,'lbs/ac',500,5000,30000),A('price','Farm gate price',1.80,'$/lb',0.05,0.30,8.00,'grain_price')],calc:a=>a.yield*a.price,fstr:a=>`${a.yield.toLocaleString()} lbs × $${a.price.toFixed(2)}/lb`}
+     ],
+     varCosts:[
+       {id:'plants',label:'Transplants',asm:[A('count','Plants/acre',2200,'plants/ac',100,800,5000),A('price','Price/plant',0.30,'$/plant',0.01,0.10,1.50,'input_costs')],calc:a=>a.count*a.price,fstr:a=>`${a.count.toLocaleString()} plants × $${a.price.toFixed(2)}/plant`},
+       {id:'fert',label:'Fertilizer & amendments',asm:[A('v','Fertility cost',380,'$/ac',10,100,800,'input_costs')],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'pest',label:'Pesticides / disease mgmt',asm:[A('v','Pest mgmt',220,'$/ac',10,50,500,'input_costs')],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'mulch',label:'Mulch / plastic / row cover',asm:[A('v','Mulch cost',280,'$/ac',10,50,600)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'irrig',label:'Irrigation (operating)',asm:[A('v','Irrigation cost',150,'$/ac',5,30,400)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'stakes',label:'Stakes, clips & trellis',asm:[A('v','Trellis cost',180,'$/ac',5,50,400)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'harvest',label:'Harvest labor',pos:'labor_rate',asm:[A('yield','Yield',15000,'lbs/ac',500,5000,30000),A('rate','Harvest rate',75,'lbs/hr-person',5,30,150),A('wage','Wage rate',14,'$/hr',0.5,7.25,30,'labor_rate')],calc:a=>(a.yield/a.rate)*a.wage,fstr:a=>`${a.yield.toLocaleString()} lbs ÷ ${a.rate} lbs/hr × $${a.wage}/hr`},
+       {id:'pack',label:'Packaging',asm:[A('v','Packaging cost',350,'$/ac',10,50,800)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'mkt',label:'Marketing (farmers market, CSA)',asm:[A('v','Marketing cost',600,'$/ac',25,0,2000)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`}
+     ],
+     fixCosts:[
+       {id:'land',label:'Land charge',asm:[A('v','Land charge',200,'$/ac',10,50,500,'land_cost')],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'equip',label:'Equipment depr.',asm:[A('v','Equipment depr.',180,'$/ac',5,50,400)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'tunnel',label:'High tunnel share',asm:[A('v','Tunnel share',300,'$/ac',10,0,1000)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'int',label:'Interest',asm:[A('v','Interest',80,'$/ac',5,0,200)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`}
+     ]
+    },
+    {id:'garlic',name:'Garlic (direct market)',unit:'ac',icon:'🧄',col:'#744210',
+     src:'Cornell CCE Eastern NY — Crystal Stewart-Courtens garlic enterprise benchmarks.',nrcs:['340','590'],
+     scale:{label:'Acres planted',value:1,unit:'ac'},
+     income:[
+       {id:'garlic',label:'Cured garlic sales',asm:[A('yield','Cured yield',5000,'lbs/ac',100,2000,8000),A('price','Farm gate price',4.00,'$/lb',0.10,1.00,12.00,'grain_price')],calc:a=>a.yield*a.price,fstr:a=>`${a.yield.toLocaleString()} lbs × $${a.price.toFixed(2)}/lb`},
+       {id:'seed',label:'Seed garlic premium lots',asm:[A('pct','% sold as seed',15,'% of crop',1,0,50),A('yield','Total yield',5000,'lbs/ac',100,2000,8000),A('premium','Price premium',2.00,'$/lb above mkt',0.25,0,8)],calc:a=>(a.pct/100)*a.yield*a.premium,fstr:a=>`${a.pct}% of ${a.yield.toLocaleString()} lbs × $${a.premium.toFixed(2)} premium`}
+     ],
+     varCosts:[
+       {id:'seedstk',label:'Seed stock',asm:[A('rate','Planting stock',800,'lbs/ac',25,400,1400),A('price','Seed price',5.00,'$/lb',0.25,2.00,15.00,'input_costs')],calc:a=>a.rate*a.price,fstr:a=>`${a.rate} lbs × $${a.price.toFixed(2)}/lb seed`},
+       {id:'fert',label:'Fertilizer',asm:[A('v','Fertility cost',300,'$/ac',10,50,600,'input_costs')],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'mulch',label:'Mulch straw',asm:[A('tons','Straw needed',2,'T/ac',0.25,1,5),A('price','Straw price',100,'$/T',5,40,250,'input_costs')],calc:a=>a.tons*a.price,fstr:a=>`${a.tons} T × $${a.price}/T`},
+       {id:'cult',label:'Cultivation & weed control',asm:[A('v','Cultivation cost',180,'$/ac',5,30,400)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'harvest',label:'Harvest labor (clip, cure, grade)',pos:'labor_rate',asm:[A('hrs','Harvest hours',60,'hrs/ac',5,20,150),A('wage','Wage rate',14,'$/hr',0.5,7.25,30,'labor_rate')],calc:a=>a.hrs*a.wage,fstr:a=>`${a.hrs} hrs × $${a.wage}/hr`},
+       {id:'cure',label:'Curing & storage',asm:[A('v','Curing cost',200,'$/ac',5,50,400)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'mkt',label:'Packaging & marketing',asm:[A('v','Marketing cost',600,'$/ac',25,0,1500)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`}
+     ],
+     fixCosts:[
+       {id:'land',label:'Land charge',asm:[A('v','Land charge',200,'$/ac',10,50,500,'land_cost')],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'equip',label:'Equipment depr.',asm:[A('v','Equipment depr.',120,'$/ac',5,30,300)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'int',label:'Interest on seed stock',asm:[A('seedCost','Seed cost invested',4000,'$',100,500,15000),A('rate','Interest rate',7,'%',0.25,0,20),A('mo','Months',9,'mo',1,1,12)],calc:a=>a.seedCost*(a.rate/100)*(a.mo/12),fstr:a=>`$${a.seedCost.toLocaleString()} × ${a.rate}% × ${a.mo}/12`}
+     ]
+    },
+    {id:'greens',name:'Salad Greens / Mesclun',unit:'ac',icon:'🥗',col:'#1e4d2b',
+     src:'Cornell High Tunnels, ISU Specialty Crop Budgets.',nrcs:['590','449'],
+     scale:{label:'Acres in production',value:1,unit:'ac'},
+     income:[
+       {id:'greens',label:'Salad greens / mesclun',asm:[A('cuts','Cuts per season',6,'cuts/ac',1,2,15),A('yield','Yield per cut',1333,'lbs/cut/ac',100,400,3000),A('price','Farm gate price',3.50,'$/lb',0.10,1.00,10.00,'grain_price')],calc:a=>a.cuts*a.yield*a.price,fstr:a=>`${a.cuts} cuts × ${a.yield.toLocaleString()} lbs × $${a.price.toFixed(2)}/lb`}
+     ],
+     varCosts:[
+       {id:'seed',label:'Seed',asm:[A('v','Seed cost',180,'$/ac',5,50,500,'input_costs')],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'fert',label:'Fertilizer',asm:[A('v','Fertility cost',200,'$/ac',5,50,500,'input_costs')],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'pest',label:'Pest management',asm:[A('v','Pest mgmt',120,'$/ac',5,0,400)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'harvest',label:'Harvest labor',pos:'labor_rate',asm:[A('cuts','Cuts',6,'cuts',1,2,15),A('hrs','Hours per cut',25,'hrs/cut/ac',1,5,80),A('wage','Wage rate',14,'$/hr',0.5,7.25,30,'labor_rate')],calc:a=>a.cuts*a.hrs*a.wage,fstr:a=>`${a.cuts} cuts × ${a.hrs} hrs × $${a.wage}/hr`},
+       {id:'wash',label:'Wash & pack',asm:[A('v','Wash/pack',800,'$/ac',25,100,2000)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'pack',label:'Packaging',asm:[A('v','Packaging',400,'$/ac',10,50,800)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'mkt',label:'Marketing',asm:[A('v','Marketing',600,'$/ac',25,0,1500)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`}
+     ],
+     fixCosts:[
+       {id:'land',label:'Land charge',asm:[A('v','Land charge',200,'$/ac',10,50,500,'land_cost')],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'equip',label:'Equipment depr.',asm:[A('v','Equipment depr.',150,'$/ac',5,30,300)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`},
+       {id:'int',label:'Interest',asm:[A('v','Interest',60,'$/ac',5,0,150)],calc:a=>a.v,fstr:a=>`$${a.v}/ac`}
+     ]
+    }
+  ]
+};
+const ALL_B=[...BUDGETS.crops,...BUDGETS.livestock,...BUDGETS.vegetables];
+const NRCS=[
+  {c:'340',n:'Cover Crop',cat:'Soil Health',unit:'ac',prg:'EQIP/CSP',rate:'$34–75/ac (state)',desc:'Seeding adapted species for seasonal soil/water protection.',concerns:['Soil erosion','Soil health','Water quality'],notes:'Up to 5 yrs/land unit. Multi-species +$10–15/ac; Organic/Beginning +25%.'},
+  {c:'328',n:'Conservation Crop Rotation',cat:'Soil Health',unit:'ac/yr',prg:'EQIP/CSP',rate:'$10–35/ac',desc:'Crops in planned sequence to improve soil.',concerns:['Soil health','Pest management'],notes:'Requires 3+ crop rotation plan.'},
+  {c:'329',n:'Residue & Tillage (No-Till)',cat:'Soil Health',unit:'ac',prg:'EQIP/CSP',rate:'$8–30/ac',desc:'Managing residue to maintain cover and reduce disturbance.',concerns:['Soil health','Erosion'],notes:'Often bundled with §340.'},
+  {c:'512',n:'Forage & Biomass Planting',cat:'Forage',unit:'ac',prg:'EQIP/CSP',rate:'$40–120/ac',desc:'Seeding adapted forages — perennial establishment.',concerns:['Forage','Soil health'],notes:'Higher rate covers establishment cost.'},
+  {c:'528',n:'Prescribed Grazing',cat:'Forage',unit:'ac',prg:'EQIP/CSP',rate:'$3–15/ac',desc:'Managed grazing with defined use/rest periods.',concerns:['Pasture condition','Water quality'],notes:'Requires written grazing plan.'},
+  {c:'382',n:'Fence',cat:'Livestock',unit:'ft',prg:'EQIP',rate:'$1.50–4/ft',desc:'Constructing fence to control livestock access.',concerns:['Water quality','Pasture'],notes:'Bundled with §528 and §614.'},
+  {c:'614',n:'Watering Facility',cat:'Livestock',unit:'each',prg:'EQIP',rate:'$500–3,000/unit',desc:'Off-stream water supply for livestock.',concerns:['Water quality','Animal health'],notes:'Structural practice — bundled with §528/§382.'},
+  {c:'590',n:'Nutrient Management',cat:'Soil Health',unit:'ac',prg:'EQIP/CSP',rate:'$8–25/ac',desc:'Managing nutrients to minimize environmental risk.',concerns:['Water quality','Soil health'],notes:'Required for soil health EQIP bundles. Cover crop N credit documented here.'},
+  {c:'393',n:'Filter Strip',cat:'Water',unit:'ac',prg:'EQIP/CSP',rate:'$150–400/ac',desc:'Herbaceous vegetation between field and water body.',concerns:['Water quality','Riparian health'],notes:'Income foregone basis.'},
+  {c:'441',n:'Microirrigation System',cat:'Irrigation',unit:'ac',prg:'EQIP',rate:'$200–800/ac',desc:'Installing drip or micro-spray irrigation.',concerns:['Water conservation'],notes:'High priority in water-limited areas.'},
+  {c:'449',n:'Irrigation Water Management',cat:'Irrigation',unit:'ac',prg:'EQIP/CSP',rate:'$10–30/ac',desc:'Scheduling irrigation to meet crop needs without excess.',concerns:['Water conservation','Soil health'],notes:'Often paired with §441.'},
+];
+const RESOURCES=[
+  {t:'AgDecisionMaker — Enterprise Budgets',o:'Iowa State University Extension (A1-20, B1-21, A1-17, 2025)',u:'https://www.extension.iastate.edu/agdm/decisiontools.html',d:'Comprehensive enterprise budgets for corn, soybeans, alfalfa, and livestock. Primary data source for field crop and livestock templates.'},
+  {t:'Budgeting for Agricultural Decision Making',o:'Penn State Extension — Harper, Hyde et al.',u:'https://extension.psu.edu/budgeting-for-agricultural-decision-making',d:'Partial budget framework used in this tool. Four-question structure and interpretation guidelines from this publication.'},
+  {t:'High Tunnel Enterprise Budgets',o:'Cornell University High Tunnels Program',u:'https://blogs.cornell.edu/hightunnels/economics/sample-budgets-spreadsheets/',d:'Vegetable enterprise budgets for NE conditions. Basis for vegetable templates.'},
+  {t:'Garlic Enterprise Benchmarks — Eastern NY',o:'Cornell CCE Eastern NY — Crystal Stewart-Courtens',u:'https://enych.cce.cornell.edu/',d:'Regional hardneck garlic production benchmarks. Seed cost, curing, and direct market pricing inform the garlic template.'},
+  {t:'EQIP Payment Schedules',o:'USDA NRCS',u:'https://www.nrcs.usda.gov/getting-assistance/payment-schedules',d:'Official annual state-by-state NRCS practice payment rates, updated each October.'},
+  {t:'Cover Crop Economics',o:'SARE Sustainable Agriculture Research & Education (2020)',u:'https://www.sare.org/publications/cover-crop-economics/',d:'Cover crop profitability including NRCS EQIP payment rate tables.'},
+  {t:'OSU Farm Office Enterprise Budgets',o:'Ohio State University Extension',u:'https://farmoffice.osu.edu/farm-management/enterprise-budgets',d:'Annual crop and livestock budgets. Supplementary validation source.'},
+];
+
+// STATE
+let nrcsOn=false,posOn=false,currentCat='crops',selBudget=null;
+const bState={};
+const pbData={
+  ar:[{lbl:'N credit from legume cover crop',val:28},{lbl:'Yield increase following cover crop',val:22}],
+  rc:[{lbl:'Reduced herbicide — weed suppression',val:15},{lbl:'Reduced N fertilizer application',val:20}],
+  ac:[{lbl:'Cover crop seed cost',val:28},{lbl:'Seeding (drilling)',val:12},{lbl:'Termination',val:14}],
+  rr:[{lbl:'Potential yield drag (establishment year)',val:5}]
+};
+
+function initState(id){
+  if(bState[id]) return bState[id];
+  const b=ALL_B.find(x=>x.id===id);
+  if(!b) return null;
+  bState[id]={scale:b.scale.value};
+  ['income','varCosts','fixCosts'].forEach(sec=>{
+    bState[id][sec]={};
+    b[sec].forEach(li=>{
+      bState[id][sec][li.id]={};
+      li.asm.forEach(a=>bState[id][sec][li.id][a.id]=a.value);
+    });
+  });
+  return bState[id];
+}
+function calcLI(li,aState){try{return Math.max(0,li.calc(aState)||0);}catch(e){return 0;}}
+function calcTotals(id){
+  const b=ALL_B.find(x=>x.id===id); if(!b) return {tInc:0,tVar:0,tFix:0,gm:0,net:0};
+  const st=bState[id]||{income:{},varCosts:{},fixCosts:{}};
+  const tInc=b.income.reduce((s,li)=>s+calcLI(li,st.income[li.id]||{}),0);
+  const tVar=b.varCosts.reduce((s,li)=>s+calcLI(li,st.varCosts[li.id]||{}),0);
+  const tFix=b.fixCosts.reduce((s,li)=>s+calcLI(li,st.fixCosts[li.id]||{}),0);
+  const gm=tInc-tVar, net=gm-tFix;
+  return {tInc:Math.round(tInc),tVar:Math.round(tVar),tFix:Math.round(tFix),gm:Math.round(gm),net:Math.round(net)};
+}
+
+// TABS
+function switchTab(id,navEl,stepIdx){
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.add('hidden'));
+  document.getElementById('tab-'+id).classList.remove('hidden');
+  document.querySelectorAll('.topbar-nav a').forEach(a=>a.classList.remove('active'));
+  if(navEl) navEl.classList.add('active');
+  else{const nl=document.querySelectorAll('.topbar-nav a');if(nl[stepIdx])nl[stepIdx].classList.add('active');}
+  document.querySelectorAll('.step-item').forEach((s,i)=>{s.classList.remove('active');if(i===stepIdx)s.classList.add('active');});
+}
+function toggleNRCS(){
+  nrcsOn=!nrcsOn;
+  document.getElementById('nrcs-btn').classList.toggle('on',nrcsOn);
+  document.getElementById('nrcs-bar').classList.toggle('visible',nrcsOn);
+  document.querySelectorAll('.nrcs-panel').forEach(p=>p.classList.toggle('hidden',!nrcsOn));
+  updateRate();
+}
+function togglePOS(){
+  posOn=!posOn;
+  document.getElementById('pos-btn').classList.toggle('on',posOn);
+  document.getElementById('pos-panel').classList.toggle('visible',posOn);
+  if(selBudget) renderDetail(selBudget);
+}
+function posSync(){
+  const btn=document.querySelector('.sync-btn'),orig=btn.innerHTML;
+  btn.innerHTML='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Synced — 3 fields updated';
+  btn.style.cssText='background:var(--good-bg);color:var(--good);border-color:var(--good-bdr)';
+  setTimeout(()=>{btn.innerHTML=orig;btn.style.cssText='';},3000);
+}
+function getStateParts(){const v=(document.getElementById('state-sel')||{value:'NY,55,66,69,69'}).value.split(',');return{code:v[0],single:+v[1],multi:+v[2],organic:+v[3],begin:+v[4]};}
+function getCurrentRate(){const s=getStateParts(),t=+(document.getElementById('prod-sel')||{value:'0'}).value;return[s.single,s.multi,s.organic,s.begin][t]||55;}
+function updateRate(){
+  const r=getCurrentRate(),sp=getStateParts();
+  const rc=document.getElementById('rate-chip');if(rc)rc.textContent='$'+r+'/ac';
+  const pr=document.getElementById('pb-340-rate');if(pr)pr.textContent='$'+r+'/ac ('+sp.code+')';
+  renderNRCSList();
+  if(selBudget) updateSidebar(selBudget);
+  calcPB();
+}
+function downloadCSV(){
+  const sp=getStateParts();
+  const rows=[['Code','Name','Cat','Programs','Unit','Rate','§340 Basic ('+sp.code+')','§340 Multi','§340 Organic','§340 Beginning','Concerns','Notes'],
+    ...NRCS.map(p=>[p.c,p.n,p.cat,p.prg,p.unit,p.rate,p.c==='340'?'$'+sp.single+'/ac':'—',p.c==='340'?'$'+sp.multi+'/ac':'—',p.c==='340'?'$'+sp.organic+'/ac':'—',p.c==='340'?'$'+sp.begin+'/ac':'—',p.concerns.join('|'),p.notes])];
+  const csv=rows.map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='nrcs-practices-'+sp.code+'.csv';a.click();
+}
+
+// BUDGET LIST
+function setCat(cat,btn){
+  currentCat=cat;selBudget=null;
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderBudgetList();
+  document.getElementById('budget-detail-panel').innerHTML='';
+  document.getElementById('budget-sidebar').innerHTML='<div class="panel"><div class="panel-body" style="text-align:center;color:var(--faint);padding:26px 16px"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--line-dk)" stroke-width="1.5" style="margin-bottom:9px"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><p style="font-size:13px">Select an enterprise to view and edit its budget assumptions</p></div></div>';
+}
+function renderBudgetList(){
+  const list=BUDGETS[currentCat]||[];
+  document.getElementById('budget-list').innerHTML=list.map(b=>{
+    initState(b.id);
+    const{tInc,tVar,tFix,gm,net}=calcTotals(b.id);
+    return `<div class="budget-card${selBudget===b.id?' active':''}" onclick="selectBudget('${b.id}')">
+      <div class="bc-icon" style="background:${b.col}22">${b.icon}</div>
+      <div class="bc-info"><div class="bc-name">${b.name}</div><div class="bc-meta">per ${b.unit} · ${b.src.split('.')[0]}</div></div>
+      <div class="bc-nums">
+        <div class="bc-stat"><div class="bc-stat-num" style="color:${gm>=0?'var(--good)':'var(--bad)'}">${gm>=0?'+':''}$${Math.abs(gm).toLocaleString()}</div><div class="bc-stat-lbl">Gross Margin</div></div>
+        <div class="bc-stat"><div class="bc-stat-num" style="color:${net>=0?'var(--soil)':'var(--bad)'}">${net>=0?'+':''}$${Math.abs(net).toLocaleString()}</div><div class="bc-stat-lbl">Net Return</div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function selectBudget(id){selBudget=id;renderBudgetList();renderDetail(id);}
+
+// DETAIL RENDER
+function renderDetail(id){
+  const b=ALL_B.find(x=>x.id===id);if(!b)return;
+  initState(b.id);
+  const st=bState[id];
+  // Build sidebar
+  document.getElementById('budget-sidebar').innerHTML=`
+    <div class="result-card">
+      <div class="result-kicker">${b.name} — per ${b.unit}</div>
+      <div class="result-big" id="sr-net">$0</div><div class="result-unit" id="sr-netunit">net return per ${b.unit}</div>
+      <div class="result-rows">
+        <div class="result-row"><span class="result-row-lbl">Total income</span><span class="result-row-val" id="sr-inc">$0</span></div>
+        <div class="result-row"><span class="result-row-lbl">Variable costs</span><span class="result-row-val" id="sr-var">$0</span></div>
+        <div class="result-row"><span class="result-row-lbl">Gross margin</span><span class="result-row-val green" id="sr-gm">$0</span></div>
+        <div class="result-row"><span class="result-row-lbl">Fixed costs</span><span class="result-row-val" id="sr-fix">$0</span></div>
+      </div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-num" id="sr-tot">$0</div><div class="stat-lbl" id="sr-tot-lbl">Total operation</div></div>
+      ${b.nrcs.includes('340')?'<div class="stat-card amber-bg"><div class="stat-num amber" id="sr-eqip">$0</div><div class="stat-lbl">With §340 EQIP</div></div>':'<div class="stat-card"><div class="stat-num" style="font-size:13px;color:var(--faint)">'+(b.nrcs.length?b.nrcs.map(c=>'§'+c).join(' '):'—')+'</div><div class="stat-lbl">Practice codes</div></div>'}
+    </div>
+    <div id="sr-nrcs-panel" class="nrcs-panel${nrcsOn?'':' hidden'}">
+      <div class="nrcs-panel-title"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--amber-dk)" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Applicable Practice Codes</div>
+      ${b.nrcs.map(code=>{const p=NRCS.find(x=>x.c===code);if(!p)return'';return`<div class="nrcs-code-row"><div class="nrcs-code-info"><span class="nrcs-code-lbl">§${code}</span><span class="nrcs-code-name">${p.n}</span><p class="nrcs-code-note">${p.notes}</p></div><span class="nrcs-code-rate">${code==='340'?'$'+getCurrentRate()+'/ac':p.rate}</span></div>`;}).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--faint);line-height:1.6;padding:8px 2px">${b.src}</div>`;
+
+  // Build detail panel
+  const renderSection=(section,items,sectionKey)=>{
+    const labels={income:'Income',varCosts:'Variable Costs',fixCosts:'Fixed Costs'};
+    const colors={income:'var(--good)',varCosts:'var(--amber-dk)',fixCosts:'var(--bad)'};
+    const bgColors={income:'var(--good-bg)',varCosts:'var(--amber-bg)',fixCosts:'var(--bad-bg)'};
+    return `<div class="li-section-head" style="background:${bgColors[section]}">
+      <span class="li-section-lbl" style="color:${colors[section]}">${labels[section]}</span>
+    </div>
+    ${items.map(li=>{
+      const aState=st[section][li.id]||{};
+      const val=calcLI(li,aState);
+      const fstr=li.fstr(aState);
+      const showPOS=posOn&&(li.pos||li.asm.some(a=>a.pos));
+      return `<div class="li-row-wrap" id="lirow-${id}-${section}-${li.id}">
+        <div class="li-main-row">
+          <button class="li-expand" onclick="toggleLI('${id}','${section}','${li.id}',this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+          <div class="li-label-cell">
+            <div class="li-label-text">${li.label}${showPOS?'<span class="li-pos-tag">⟳ POS</span>':''}</div>
+            <div class="li-formula-text" id="liform-${id}-${section}-${li.id}">${fstr} = $${fmtV(val)}</div>
+          </div>
+          <div class="li-val-cell" id="lival-${id}-${section}-${li.id}">$${fmtV(val)}</div>
+        </div>
+        <div class="li-assume" id="liasm-${id}-${section}-${li.id}">
+          <div class="assume-grid">
+            ${li.asm.map(a=>{
+              const v=aState[a.id]!==undefined?aState[a.id]:a.value;
+              const isPOS=posOn&&a.pos;
+              return `<div class="assume-field">
+                <div class="assume-lbl">${a.label}${isPOS?'<span class="li-pos-tag">⟳ POS</span>':''}</div>
+                <div class="assume-wrap">
+                  <input type="number" class="assume-input" value="${v}" step="${a.step}" min="${a.min}" max="${a.max}"
+                    oninput="updateLI('${id}','${section}','${li.id}','${a.id}',+this.value)">
+                  <span class="assume-unit-lbl">${a.unit}</span>
+                </div>
+              </div>`;
+            }).join('')}
+          </div>
+          <div class="assume-result" id="lires-${id}-${section}-${li.id}">${fstr} = <strong>$${fmtV(val)}</strong> per ${b.unit}</div>
+          ${showPOS?`<div style="font-size:11px;color:var(--blue);display:flex;align-items:center;gap:4px;margin-top:5px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>Can sync from FarmHack Box POS — field: <strong>${li.pos||li.asm.find(a=>a.pos)?.pos}</strong></div>`:''}
+        </div>
+      </div>`;
+    }).join('')}`;
+  };
+
+  document.getElementById('budget-detail-panel').innerHTML=`
+    <div class="panel">
+      <div class="panel-head"><span class="panel-title">${b.icon} ${b.name}</span><span class="panel-meta">per ${b.unit}</span></div>
+      <div class="panel-body" style="padding-bottom:8px">
+        <div class="scale-bar">
+          <span class="scale-lbl">Operation Scale</span>
+          <input type="number" class="scale-input" id="det-scale" value="${st.scale}" min="1"
+            oninput="bState['${id}'].scale=Math.max(1,+this.value||1);updateSidebar('${id}')">
+          <span class="scale-unit">${b.scale.unit}</span>
+          <div class="scale-preview" id="det-scale-preview">calculating...</div>
+        </div>
+        <p style="font-size:11px;color:var(--faint);margin-bottom:0">Click ▶ next to any line item to edit its underlying assumptions — price, weight, rate, quantity, etc.</p>
+      </div>
+      <!-- Income -->
+      ${renderSection('income',b.income,'income')}
+      <div class="li-subtotal-row"><span class="li-subtotal-lbl">Total Income</span><span class="li-subtotal-val" id="sub-inc-${id}" style="color:var(--good)">—</span></div>
+      <!-- Variable Costs -->
+      ${renderSection('varCosts',b.varCosts,'varCosts')}
+      <div class="li-subtotal-row"><span class="li-subtotal-lbl">Total Variable Costs</span><span class="li-subtotal-val" id="sub-var-${id}" style="color:var(--amber-dk)">—</span></div>
+      <div class="li-subtotal-row" style="background:var(--forest-bg)"><span class="li-subtotal-lbl" style="color:var(--forest)">Gross Margin (Income − Variable)</span><span class="li-subtotal-val" id="sub-gm-${id}" style="color:var(--forest)">—</span></div>
+      <!-- Fixed Costs -->
+      ${renderSection('fixCosts',b.fixCosts,'fixCosts')}
+      <div class="li-total-row"><span class="li-total-lbl">Net Return per ${b.unit}</span><span class="li-total-val" id="sub-net-${id}">—</span></div>
+    </div>`;
+  updateSidebar(id);
+}
+
+function toggleLI(id,section,liId,btn){
+  const el=document.getElementById(`liasm-${id}-${section}-${liId}`);
+  const open=el.classList.toggle('open');
+  btn.classList.toggle('open',open);
+}
+
+function updateLI(id,section,liId,asmId,val){
+  if(!bState[id]||!bState[id][section]) return;
+  bState[id][section][liId][asmId]=val;
+  const b=ALL_B.find(x=>x.id===id);if(!b)return;
+  const li=b[section].find(x=>x.id===liId);if(!li)return;
+  const aState=bState[id][section][liId];
+  const newVal=calcLI(li,aState);
+  const fstr=li.fstr(aState);
+  const setT=(eid,v)=>{const el=document.getElementById(eid);if(el)el.textContent=v;};
+  setT(`liform-${id}-${section}-${liId}`,`${fstr} = $${fmtV(newVal)}`);
+  setT(`lival-${id}-${section}-${liId}`,'$'+fmtV(newVal));
+  setT(`lires-${id}-${section}-${liId}`,`${fstr} = `);
+  const resEl=document.getElementById(`lires-${id}-${section}-${liId}`);
+  if(resEl)resEl.innerHTML=`${fstr} = <strong>$${fmtV(newVal)}</strong> per ${b.unit}`;
+  updateSidebar(id);
+  renderBudgetList();
+}
+
+function updateSidebar(id){
+  const{tInc,tVar,tFix,gm,net}=calcTotals(id);
+  const b=ALL_B.find(x=>x.id===id);if(!b)return;
+  const st=bState[id]||{};const scale=st.scale||1;
+  const fmt=n=>(n>=0?'+':'−')+'$'+Math.abs(n).toLocaleString();
+  const setT=(eid,v)=>{const el=document.getElementById(eid);if(el)el.textContent=v;};
+  const netEl=document.getElementById('sr-net');
+  if(netEl){netEl.textContent=fmt(net);netEl.className='result-big '+(net>=0?'good':'bad');}
+  setT('sr-inc','$'+tInc.toLocaleString());setT('sr-var','$'+tVar.toLocaleString());
+  setT('sr-gm',fmt(gm));setT('sr-fix','$'+tFix.toLocaleString());
+  const totEl=document.getElementById('sr-tot');
+  if(totEl){totEl.textContent=fmt(net*scale);totEl.className='stat-num '+(net*scale>=0?'good':'bad');}
+  setT('sr-tot-lbl',`Total ×${scale} ${b.scale.unit}`);
+  if(b.nrcs.includes('340')){const eqipRate=getCurrentRate();const eqEl=document.getElementById('sr-eqip');if(eqEl){eqEl.textContent=fmt((net+eqipRate)*scale);eqEl.className='stat-num '+(((net+eqipRate)*scale)>=0?'amber':'bad');}}
+  setT(`sub-inc-${id}`,'$'+tInc.toLocaleString());setT(`sub-var-${id}`,'$'+tVar.toLocaleString());
+  setT(`sub-gm-${id}`,fmt(gm));
+  const netSubEl=document.getElementById(`sub-net-${id}`);
+  if(netSubEl){netSubEl.textContent=fmt(net);netSubEl.style.color=net>=0?'var(--good)':'var(--bad)';}
+  const preview=document.getElementById('det-scale-preview');
+  if(preview)preview.textContent=`Total operation: ${scale} ${b.scale.unit} × $${Math.abs(net).toLocaleString()}/unit = ${fmt(net*scale)}`;
+}
+function fmtV(v){const a=Math.abs(v);return a<10?a.toFixed(2):Math.round(a).toLocaleString();}
+
+// PARTIAL BUDGET
+function renderAllPB(){
+  ['ar','rc','ac','rr'].forEach(s=>{
+    const c=document.getElementById('pb-'+s);if(!c)return;
+    c.innerHTML=pbData[s].map((row,i)=>`<div class="pb-row"><input type="text" value="${row.lbl}" oninput="pbData.${s}[${i}].lbl=this.value" placeholder="Line item description"><input type="number" value="${row.val}" oninput="pbData.${s}[${i}].val=+this.value||0;calcPB()"><button class="pb-remove" onclick="pbData.${s}.splice(${i},1);renderAllPB()">×</button></div>`).join('');
+  });
+  calcPB();
+}
+function addPBRow(s){pbData[s].push({lbl:'New item',val:0});renderAllPB();}
+function addEQIPToPB(){const r=getCurrentRate(),sp=getStateParts();pbData.ar.push({lbl:`EQIP §340 Cover Crop payment (${sp.code})`,val:r});renderAllPB();}
+function calcPB(){
+  const sum=arr=>arr.reduce((s,r)=>s+(+r.val||0),0);
+  const ar=sum(pbData.ar),rc=sum(pbData.rc),ac=sum(pbData.ac),rr=sum(pbData.rr);
+  const net=ar+rc-ac-rr,eqipRate=getCurrentRate(),netEqip=net+eqipRate;
+  const fmt=n=>(n>=0?'+$':'−$')+Math.abs(n).toLocaleString();
+  const setT=(eid,v)=>{const el=document.getElementById(eid);if(el)el.textContent=v;};
+  ['ar','rc','ac','rr'].forEach(s=>setT('pb-'+s+'-total','$'+sum(pbData[s]).toLocaleString()));
+  setT('pb-r-ar','$'+ar.toLocaleString());setT('pb-r-rc','$'+rc.toLocaleString());
+  setT('pb-r-ac','$'+ac.toLocaleString());setT('pb-r-rr','$'+rr.toLocaleString());
+  const nb=document.getElementById('pb-net-big');
+  if(nb){nb.textContent=fmt(net);nb.className='result-big '+(net>=0?'good':'bad');}
+  const ns=document.getElementById('pb-stat-no');if(ns){ns.textContent=fmt(net);ns.className='stat-num '+(net>=0?'good':'bad');}
+  const ws=document.getElementById('pb-stat-yes');if(ws){ws.textContent=fmt(netEqip);ws.className='stat-num '+(netEqip>=0?'amber':'bad');}
+  const interp=document.getElementById('pb-interp');
+  if(interp){
+    if(net>50)interp.textContent='The proposed change is profitable. Consider a 3-year adoption plan with annual benchmarking.';
+    else if(net>0)interp.textContent='Marginally profitable. Long-term soil and input savings may improve returns over time.';
+    else if(net>-50)interp.textContent='Slightly unprofitable on paper. EQIP §340 may offset the difference. Long-term soil benefits not captured here.';
+    else interp.textContent='The change reduces profit significantly under current assumptions. Review inputs or consider phased adoption.';
+  }
+}
+
+// NRCS LIST
+function renderNRCSList(){
+  const sp=getStateParts();
+  const el=document.getElementById('nrcs-list');if(!el)return;
+  el.innerHTML=NRCS.map(p=>`<div style="background:var(--white);border:1px solid var(--line);border-radius:var(--r-lg);padding:13px 17px;margin-bottom:9px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:7px;margin-bottom:5px">
+      <div><span style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:var(--amber-dk)">§${p.c}</span><span style="font-size:14px;font-weight:600;color:var(--ink);margin-left:8px">${p.n}</span><span style="font-family:'DM Mono',monospace;font-size:9px;background:var(--cream-dk);color:var(--faint);padding:2px 7px;border-radius:4px;margin-left:7px">${p.cat}</span></div>
+      <div style="text-align:right"><div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:${p.c==='340'?'var(--good)':'var(--soil)'}">${p.c==='340'?'$'+sp.single+'/ac ('+sp.code+')':p.rate}</div><div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--faint)">${p.prg}</div></div>
+    </div>
+    <p style="font-size:12.5px;color:var(--dim);margin-bottom:5px;line-height:1.5">${p.desc}</p>
+    <p style="font-size:11px;color:var(--faint);margin-bottom:7px;line-height:1.5">${p.notes}</p>
+    <div>${p.concerns.map(c=>`<span class="sp-pill amber">${c}</span>`).join('')}</div>
+    ${p.c==='340'?`<div style="margin-top:9px;background:var(--soil-bg);border:1px solid var(--soil-rim);border-radius:var(--r);padding:7px 11px;display:grid;grid-template-columns:repeat(4,1fr);gap:5px">
+      ${[['$'+sp.single+'/ac','Standard'],['$'+sp.multi+'/ac','Multi-species'],['$'+sp.organic+'/ac','Organic'],['$'+sp.begin+'/ac','Beginning']].map(([v,l])=>`<div style="text-align:center"><div style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--soil)">${v}</div><div style="font-size:9px;color:var(--faint)">${l}</div></div>`).join('')}
+    </div>`:''}
+  </div>`).join('');
+}
+
+function renderResources(){
+  const el=document.getElementById('resources-body');if(!el)return;
+  el.innerHTML=RESOURCES.map(r=>`<div class="citation"><div class="citation-title">${r.t}</div><div class="citation-org">${r.o}</div><div class="citation-desc">${r.d}</div><a href="${r.u}" target="_blank" class="citation-link">${r.u}</a></div>`).join('');
+}
+
+// INIT
+ALL_B.forEach(b=>initState(b.id));
+renderBudgetList();renderAllPB();renderNRCSList();renderResources();
+</script>
+</body>
+</html>
