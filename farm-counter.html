@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Farm Counter</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+:root {
+  --green: #1D9E75; --green-dark: #0F6E56; --green-light: #E1F5EE; --green-mid: #9FE1CB;
+  --amber: #EF9F27; --coral: #D85A30;
+  --bg: #f5f5f3; --surface: #ffffff; --border: rgba(0,0,0,0.10);
+  --text: #1a1a18; --muted: #6b6b66; --hint: #9b9b95;
+  --radius: 12px; --radius-lg: 20px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1a18; --surface: #252523; --border: rgba(255,255,255,0.10);
+    --text: #f0efe8; --muted: #9b9b95; --hint: #6b6b66;
+  }
+}
+
+html, body { height: 100%; background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: var(--text); }
+.app { display: flex; flex-direction: column; height: 100dvh; max-width: 480px; margin: 0 auto; background: var(--bg); }
+
+/* Top bar */
+.top-bar { background: var(--surface); border-bottom: 0.5px solid var(--border); padding: 12px 16px 10px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+.farm-name { font-size: 15px; font-weight: 600; color: var(--text); }
+.sync-badge { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex-shrink: 0; transition: background 0.4s; }
+
+/* Tabs */
+.tabs-wrap { background: var(--surface); border-bottom: 0.5px solid var(--border); display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; flex-shrink: 0; }
+.tabs-wrap::-webkit-scrollbar { display: none; }
+.tab { flex-shrink: 0; padding: 10px 14px 9px; font-size: 12px; font-weight: 400; color: var(--muted); border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: color 0.15s; scroll-snap-align: start; }
+.tab.active { color: var(--green); border-bottom-color: var(--green); font-weight: 600; }
+
+/* Counter area */
+.counter-area { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 14px 24px 10px; gap: 5px; min-height: 0; }
+.item-header { display: flex; align-items: center; gap: 10px; }
+.item-title { font-size: 18px; font-weight: 600; text-align: center; color: var(--text); }
+
+.cam-btn { width: 36px; height: 36px; border-radius: 18px; border: 0.5px solid var(--border); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.1s, transform 0.08s; position: relative; }
+.cam-btn:active { transform: scale(0.90); background: var(--bg); }
+.cam-btn svg { width: 18px; height: 18px; }
+.photo-badge { position: absolute; top: -3px; right: -3px; width: 14px; height: 14px; border-radius: 7px; background: var(--green); color: white; font-size: 9px; font-weight: 700; display: none; align-items: center; justify-content: center; }
+.photo-badge.visible { display: flex; }
+
+.item-key { font-size: 11px; color: var(--hint); font-family: monospace; text-align: center; }
+
+/* Unit hint on counter face */
+.item-unit-hint { font-size: 11px; color: var(--green-dark); background: var(--green-light); border-radius: 8px; padding: 4px 12px; text-align: center; max-width: 96%; line-height: 1.4; }
+
+/* Photo strip */
+.photo-strip { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; max-width: 100%; padding: 2px 0; }
+.photo-strip::-webkit-scrollbar { display: none; }
+.photo-thumb { position: relative; flex-shrink: 0; }
+.photo-thumb img { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; border: 0.5px solid var(--border); display: block; cursor: zoom-in; }
+.photo-thumb .del-photo { position: absolute; top: -5px; right: -5px; width: 16px; height: 16px; border-radius: 8px; background: var(--coral); border: none; color: white; font-size: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+.count-num { font-size: 96px; font-weight: 700; line-height: 1; color: var(--text); letter-spacing: -5px; text-align: center; transition: transform 0.08s; }
+.count-num.flash { transform: scale(1.06); }
+.count-unit { font-size: 14px; color: var(--muted); margin-top: -4px; }
+
+.btn-row { display: flex; align-items: center; justify-content: center; gap: 20px; margin-top: 6px; }
+.adj-btn { width: 52px; height: 52px; border-radius: 26px; border: 0.5px solid var(--border); background: var(--surface); color: var(--text); font-size: 24px; font-weight: 300; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.08s; user-select: none; }
+.adj-btn:active { transform: scale(0.90); background: var(--bg); }
+.big-btn { width: 178px; height: 178px; border-radius: 89px; background: var(--green); border: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; transition: transform 0.08s, background 0.1s; user-select: none; -webkit-user-select: none; }
+.big-btn:active { transform: scale(0.93); background: var(--green-dark); }
+.big-btn svg { width: 48px; height: 48px; }
+.big-btn-label { font-size: 14px; font-weight: 600; color: var(--green-light); letter-spacing: 1px; }
+
+/* Log */
+.log-panel { background: var(--surface); border-top: 0.5px solid var(--border); padding: 10px 16px 8px; flex-shrink: 0; max-height: 115px; overflow-y: auto; scrollbar-width: none; }
+.log-panel::-webkit-scrollbar { display: none; }
+.log-hdr { font-size: 10px; font-weight: 600; color: var(--hint); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
+.log-entry { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 0.5px solid var(--border); gap: 8px; }
+.log-entry:last-child { border-bottom: none; }
+.log-name { font-size: 12px; color: var(--text); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.log-count { font-size: 12px; font-weight: 600; color: var(--green); flex-shrink: 0; }
+.log-cam { font-size: 10px; color: var(--hint); flex-shrink: 0; }
+.log-time { font-size: 11px; color: var(--hint); flex-shrink: 0; }
+.log-empty { font-size: 12px; color: var(--hint); }
+
+/* Bottom bar */
+.bottom-bar { background: var(--surface); border-top: 0.5px solid var(--border); padding: 10px 12px 16px; display: flex; gap: 8px; flex-shrink: 0; }
+.btn { flex: 1; padding: 11px 6px; border-radius: var(--radius); border: 0.5px solid var(--border); background: var(--surface); font-size: 12px; font-weight: 600; color: var(--text); cursor: pointer; transition: background 0.1s, transform 0.08s; }
+.btn:active { background: var(--bg); transform: scale(0.97); }
+.btn-primary { background: var(--green); border-color: var(--green); color: white; }
+.btn-primary:active { background: var(--green-dark); }
+.btn-danger { color: var(--coral); border-color: rgba(216,90,48,0.25); }
+
+/* Modals */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.50); z-index: 100; align-items: flex-end; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--surface); border-radius: 24px 24px 0 0; padding: 20px 20px 32px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; }
+.modal-title { font-size: 16px; font-weight: 600; margin-bottom: 3px; }
+.modal-sub { font-size: 12px; color: var(--muted); margin-bottom: 16px; line-height: 1.5; }
+
+.field { margin-bottom: 12px; }
+.field label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 5px; }
+.field input, .field select { width: 100%; padding: 10px 12px; border-radius: var(--radius); border: 0.5px solid var(--border); background: var(--bg); font-size: 14px; color: var(--text); -webkit-appearance: none; }
+.field input:focus, .field select:focus { outline: 2px solid var(--green); outline-offset: 1px; }
+
+/* Unit helper block */
+.unit-helper { margin-top: 8px; }
+.unit-helper-label { font-size: 11px; color: var(--hint); margin-bottom: 6px; }
+.unit-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+.unit-chip { padding: 3px 9px; border-radius: 14px; border: 0.5px solid var(--border); font-size: 11px; cursor: pointer; background: var(--bg); color: var(--muted); transition: background 0.1s, color 0.1s, border-color 0.1s; white-space: nowrap; }
+.unit-chip:hover, .unit-chip:active { background: var(--green-light); color: var(--green-dark); border-color: var(--green-mid); }
+
+/* Source chips */
+.chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+.chip { padding: 4px 10px; border-radius: 20px; border: 0.5px solid var(--border); font-size: 11px; cursor: pointer; background: var(--bg); color: var(--muted); transition: background 0.1s; }
+.chip.sel { background: var(--green-light); border-color: var(--green); color: var(--green-dark); font-weight: 600; }
+
+.modal-btns { display: flex; gap: 8px; margin-top: 16px; }
+.divider { height: 0.5px; background: var(--border); margin: 14px 0; }
+.payload-box { margin-top: 12px; background: var(--bg); border-radius: var(--radius); padding: 10px 12px; font-size: 11px; font-family: monospace; color: var(--muted); line-height: 1.6; word-break: break-all; max-height: 180px; overflow-y: auto; }
+
+/* Manage list */
+.item-list { display: flex; flex-direction: column; gap: 6px; }
+.item-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: var(--radius); border: 0.5px solid var(--border); background: var(--bg); }
+.item-row-info { flex: 1; min-width: 0; }
+.item-row-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-row-meta { font-size: 11px; color: var(--hint); margin-top: 1px; }
+.item-row-count { font-size: 13px; font-weight: 700; color: var(--green); white-space: nowrap; flex-shrink: 0; }
+.icon-btn { width: 30px; height: 30px; border-radius: 15px; border: none; background: none; color: var(--hint); cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: color 0.1s, background 0.1s, transform 0.08s; }
+.icon-btn:active { transform: scale(0.88); }
+.icon-btn.edit:hover { color: var(--green); background: rgba(29,158,117,0.08); }
+.icon-btn.del:hover  { color: var(--coral); background: rgba(216,90,48,0.08); }
+
+/* Photo lightbox */
+.photo-view { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 300; align-items: center; justify-content: center; }
+.photo-view.open { display: flex; }
+.photo-view img { max-width: 92vw; max-height: 85vh; border-radius: 10px; object-fit: contain; }
+.photo-view-close { position: fixed; top: 20px; right: 20px; width: 36px; height: 36px; border-radius: 18px; background: rgba(255,255,255,0.15); border: none; color: white; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+/* Toast */
+.toast { position: fixed; bottom: 110px; left: 50%; transform: translateX(-50%); background: #252523; color: #f0efe8; font-size: 13px; font-weight: 500; padding: 9px 20px; border-radius: 40px; opacity: 0; transition: opacity 0.25s; pointer-events: none; z-index: 200; white-space: nowrap; }
+.toast.show { opacity: 1; }
+#photoInput { display: none; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="top-bar">
+    <span class="farm-name">Farm Counter</span>
+    <span class="sync-badge">
+      <span class="sync-dot" id="dotEl"></span>
+      <span id="syncStatus">Offline · ready</span>
+    </span>
+  </div>
+
+  <div class="tabs-wrap" id="tabsWrap"></div>
+
+  <div class="counter-area">
+    <div class="item-header">
+      <div class="item-title" id="itemTitle"></div>
+      <button class="cam-btn" onclick="triggerCamera()" title="Add photo observation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        <span class="photo-badge" id="photoBadge"></span>
+      </button>
+    </div>
+    <div class="item-key" id="itemKey"></div>
+    <div class="item-unit-hint" id="itemUnitHint" style="display:none"></div>
+    <div class="photo-strip" id="photoStrip"></div>
+    <div class="count-num" id="countNum">0</div>
+    <div class="count-unit" id="countUnit"></div>
+    <div class="btn-row">
+      <button class="adj-btn" id="minusBtn">−</button>
+      <button class="big-btn" id="bigBtn">
+        <svg viewBox="0 0 48 48" fill="none">
+          <circle cx="24" cy="24" r="21" stroke="#9FE1CB" stroke-width="1.5"/>
+          <path d="M24 14v20M14 24h20" stroke="#E1F5EE" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <span class="big-btn-label">COUNT</span>
+      </button>
+      <button class="adj-btn" id="plusBtn">+</button>
+    </div>
+  </div>
+
+  <div class="log-panel">
+    <div class="log-hdr">Session log</div>
+    <div id="logEntries"><span class="log-empty">No counts yet this session.</span></div>
+  </div>
+
+  <div class="bottom-bar">
+    <button class="btn btn-danger" onclick="resetCurrent()">Reset</button>
+    <button class="btn" onclick="openModal('manageModal')">Manage</button>
+    <button class="btn" onclick="openAddModal()">+ Add</button>
+    <button class="btn btn-primary" onclick="openSyncModal()">Sync ↑</button>
+  </div>
+</div>
+
+<input type="file" id="photoInput" accept="image/*" capture="environment">
+<div class="toast" id="toast"></div>
+
+<div class="photo-view" id="photoView" onclick="closePhotoView()">
+  <button class="photo-view-close" onclick="closePhotoView()">✕</button>
+  <img id="photoViewImg" src="" alt="observation photo">
+</div>
+
+<!-- ══ ADD MODAL ══ -->
+<div class="modal-overlay" id="addModal" onclick="maybeClose(event,'addModal')">
+  <div class="modal">
+    <div class="modal-title">Add inventory item</div>
+    <div class="modal-sub">New item will appear as a tab in the counter.</div>
+    <div class="chip-row">
+      <span style="font-size:12px;color:var(--muted);flex-shrink:0">Source:</span>
+      <span class="chip sel" data-src="farmOS"  onclick="setChip(this,'add')">FarmOS</span>
+      <span class="chip"    data-src="LiteFarm" onclick="setChip(this,'add')">LiteFarm</span>
+      <span class="chip"    data-src="custom"   onclick="setChip(this,'add')">Custom</span>
+    </div>
+    <div class="field">
+      <label>Item name</label>
+      <input id="newName" placeholder="e.g. Hay bales — Field 3">
+    </div>
+    <div class="field">
+      <label>Unit</label>
+      <input id="newUnit" placeholder="e.g. bales">
+      <div class="unit-helper">
+        <div class="unit-helper-label">Tap to fill — common agricultural units:</div>
+        <div class="unit-chips" id="addUnitChips"></div>
+      </div>
+    </div>
+    <div class="field">
+      <label>Field key <span style="color:var(--hint);font-weight:400">(auto-generated if blank)</span></label>
+      <input id="newKey" placeholder="e.g. asset.bale_count">
+    </div>
+    <div class="modal-btns">
+      <button class="btn" style="flex:1" onclick="closeModals()">Cancel</button>
+      <button class="btn btn-primary" style="flex:2" onclick="addItem()">Add item</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ EDIT MODAL ══ -->
+<div class="modal-overlay" id="editModal" onclick="maybeClose(event,'editModal')">
+  <div class="modal">
+    <div class="modal-title">Edit item</div>
+    <div class="modal-sub" id="editModalSub"></div>
+    <div class="chip-row">
+      <span style="font-size:12px;color:var(--muted);flex-shrink:0">Source:</span>
+      <span class="chip sel" data-src="farmOS"  onclick="setChip(this,'edit')">FarmOS</span>
+      <span class="chip"    data-src="LiteFarm" onclick="setChip(this,'edit')">LiteFarm</span>
+      <span class="chip"    data-src="custom"   onclick="setChip(this,'edit')">Custom</span>
+    </div>
+    <div class="field">
+      <label>Item name</label>
+      <input id="editName" placeholder="Item name">
+    </div>
+    <div class="field">
+      <label>Unit</label>
+      <input id="editUnit" placeholder="e.g. bales">
+      <div class="unit-helper">
+        <div class="unit-helper-label">Tap to fill — common agricultural units:</div>
+        <div class="unit-chips" id="editUnitChips"></div>
+      </div>
+    </div>
+    <div class="field">
+      <label>Field key</label>
+      <input id="editKey" placeholder="e.g. asset.bale_count">
+    </div>
+    <div class="divider"></div>
+    <div style="font-size:12px;color:var(--muted)">Count and photos are preserved when you save.</div>
+    <div class="modal-btns">
+      <button class="btn" style="flex:1" onclick="openModal('manageModal')">← Back</button>
+      <button class="btn btn-danger" style="flex:1" onclick="removeItemEdit()">Delete</button>
+      <button class="btn btn-primary" style="flex:2" onclick="saveEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MANAGE MODAL ══ -->
+<div class="modal-overlay" id="manageModal" onclick="maybeClose(event,'manageModal')">
+  <div class="modal">
+    <div class="modal-title">Manage items</div>
+    <div class="modal-sub">Pencil to edit · trash to remove.</div>
+    <div class="item-list" id="manageList"></div>
+    <div class="modal-btns" style="margin-top:18px">
+      <button class="btn btn-primary" style="flex:1" onclick="closeModals()">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SYNC MODAL ══ -->
+<div class="modal-overlay" id="syncModal" onclick="maybeClose(event,'syncModal')">
+  <div class="modal">
+    <div class="modal-title">Sync to FarmHack Box</div>
+    <div class="modal-sub">Send counts over LAN to FarmOS, LiteFarm, or raw JSON endpoint.</div>
+    <div class="field"><label>Box LAN address</label><input id="boxAddr" value="http://192.168.1.100:8080"></div>
+    <div class="field"><label>API token (optional)</label><input id="authTok" placeholder="Bearer token…" type="password"></div>
+    <div class="field"><label>Target system</label>
+      <select id="targetSys">
+        <option value="farmos">FarmOS</option>
+        <option value="litefarm">LiteFarm</option>
+        <option value="raw">Raw JSON</option>
+      </select>
+    </div>
+    <div class="modal-btns">
+      <button class="btn" onclick="closeModals()">Cancel</button>
+      <button class="btn" onclick="copyJSON()">Copy JSON</button>
+      <button class="btn btn-primary" onclick="doSync()">Send →</button>
+    </div>
+    <div class="payload-box" id="payloadBox"></div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// Unit reference — groups shown as tappable chips
+// ══════════════════════════════════════════════════════════
+const UNIT_GROUPS = [
+  { label:'Count',      units:['ea','units','pieces','sets'] },
+  { label:'Livestock',  units:['head','animals','birds','hives'] },
+  { label:'Field',      units:['bales','rows','beds','lots'] },
+  { label:'Greenhouse', units:['trays','pots','flats','cells','plugs'] },
+  { label:'Harvest',    units:['flats','bins','crates','bushels','lb','kg'] },
+  { label:'Materials',  units:['rolls','lengths','sheets','bundles'] },
+  { label:'Lumber',     units:['bd ft','pieces','boards','pallets'] },
+  { label:'Liquid',     units:['gal','L','drums','tanks'] },
+  { label:'Length',     units:['ft','m','row-ft','yd'] },
+];
+
+// Contextual hint shown on the counter face for built-in items
+const ITEM_HINTS = {
+  fence_rolls:    'Standard unit: rolls · One roll is typically 100–330 ft of wire or netting. Note gauge & style in item name.',
+  lumber_bf:      'Standard unit: bd ft · Board feet = thickness (in) × width (in) × length (ft) ÷ 12. Tally by species or grade.',
+  irr_pipe:       'Standard unit: lengths · Count full pipe sections. Include diameter & section length in the item name.',
+  drip_tape:      'Standard unit: rolls · Record roll footage in item name when lengths vary (e.g. "Drip tape — 500 ft rolls").',
+  harvest:        'Standard unit: units · Customize to match the crop — bins, crates, flats, lb, bu, etc. via Edit.',
+  bales:          'Standard unit: bales · Works for round or square bales. Note bale type (e.g. 4×5 round) in item name.',
+  pots_shed:      'Standard unit: pots · For mixed sizes, create one item per size (e.g. "Pots — 1 gal", "Pots — 4 in").',
+  seedling_trays: 'Standard unit: trays · Common cell counts: 50, 72, 128, 288. Note cell count in item name.',
+  lambs:          'Standard unit: head · Create one item per field or flock for clean per-paddock tallies.',
+  blueberry_flats:'Standard unit: flats · Standard flat = 12 pints. Note variety in item name for multi-variety harvest.',
+};
+
+// ══════════════════════════════════════════════════════════
+// Item data
+// ══════════════════════════════════════════════════════════
+const ITEMS = [
+  { id:'fence_rolls',    name:'Fence rolls',      unit:'rolls',   key:'asset.fence_rolls',     count:0, source:'custom',   photos:[] },
+  { id:'lumber_bf',      name:'Lumber pile',       unit:'bd ft',   key:'asset.lumber_bdft',     count:0, source:'custom',   photos:[] },
+  { id:'irr_pipe',       name:'Irrigation pipe',   unit:'lengths', key:'asset.irr_pipe',        count:0, source:'custom',   photos:[] },
+  { id:'drip_tape',      name:'Drip tape',         unit:'rolls',   key:'asset.drip_tape',       count:0, source:'custom',   photos:[] },
+  { id:'harvest',        name:'Harvest counter',   unit:'units',   key:'log.harvest_count',     count:0, source:'farmOS',   photos:[] },
+  { id:'bales',          name:'Bales (in-field)',   unit:'bales',   key:'log.bale_count',        count:0, source:'farmOS',   photos:[] },
+  { id:'pots_shed',      name:'Pots — shed',       unit:'pots',    key:'asset.pots_shed',       count:0, source:'custom',   photos:[] },
+  { id:'seedling_trays', name:'Seedling trays',    unit:'trays',   key:'asset.seedling_trays',  count:0, source:'LiteFarm', photos:[] },
+  { id:'lambs',          name:'Lambs (field)',      unit:'head',    key:'asset.lamb_count',      count:0, source:'farmOS',   photos:[] },
+  { id:'blueberry_flats',name:'Blueberry flats',   unit:'flats',   key:'log.blueberry_harvest', count:0, source:'LiteFarm', photos:[] },
+];
+
+let current = 0;
+let editIndex = -1;
+let chipSources = { add: 'farmOS', edit: 'farmOS' };
+let sessionLog = [];
+
+// ══════════════════════════════════════════════════════════
+// Render
+// ══════════════════════════════════════════════════════════
+function renderTabs() {
+  const w = document.getElementById('tabsWrap');
+  w.innerHTML = ITEMS.map((it,i) =>
+    `<button class="tab${i===current?' active':''}" onclick="selectItem(${i})">${it.name}</button>`
+  ).join('');
+  setTimeout(() => w.querySelectorAll('.tab')[current]?.scrollIntoView({inline:'center',block:'nearest',behavior:'smooth'}), 40);
+}
+
+function renderFace() {
+  const it = ITEMS[current];
+  document.getElementById('itemTitle').textContent = it.name;
+  document.getElementById('itemKey').textContent = it.source + ' · ' + it.key;
+  document.getElementById('countNum').textContent = it.count;
+  document.getElementById('countUnit').textContent = it.unit;
+
+  const hintEl = document.getElementById('itemUnitHint');
+  const hint = it.hint || ITEM_HINTS[it.id];
+  if (hint) { hintEl.textContent = hint; hintEl.style.display = ''; }
+  else       { hintEl.style.display = 'none'; }
+
+  renderPhotoStrip();
+}
+
+function renderPhotoStrip() {
+  const it = ITEMS[current];
+  const strip = document.getElementById('photoStrip');
+  const badge = document.getElementById('photoBadge');
+  badge.textContent = it.photos.length;
+  badge.classList.toggle('visible', it.photos.length > 0);
+  strip.innerHTML = it.photos.map((p,i) =>
+    `<div class="photo-thumb">
+      <img src="${p}" alt="obs ${i+1}" onclick="viewPhoto('${p}')">
+      <button class="del-photo" onclick="removePhoto(${i})">✕</button>
+    </div>`
+  ).join('');
+}
+
+function selectItem(i) { current = i; renderTabs(); renderFace(); }
+
+// ══════════════════════════════════════════════════════════
+// Counting
+// ══════════════════════════════════════════════════════════
+document.getElementById('bigBtn').addEventListener('click', increment);
+document.getElementById('minusBtn').addEventListener('click', () => adjust(-1));
+document.getElementById('plusBtn').addEventListener('click', () => adjust(1));
+
+let holdTimer;
+['minusBtn','plusBtn'].forEach(id => {
+  const btn = document.getElementById(id), d = id === 'minusBtn' ? -1 : 1;
+  btn.addEventListener('mousedown',  () => { holdTimer = setInterval(() => adjust(d), 140); });
+  btn.addEventListener('touchstart', () => { holdTimer = setInterval(() => adjust(d), 140); }, {passive:true});
+  ['mouseup','mouseleave','touchend'].forEach(ev => btn.addEventListener(ev, () => clearInterval(holdTimer)));
+});
+
+function increment() { ITEMS[current].count++; renderFace(); flashCount(); pushLog(); }
+function adjust(d)   { ITEMS[current].count = Math.max(0, ITEMS[current].count + d); renderFace(); pushLog(); }
+
+function flashCount() {
+  const el = document.getElementById('countNum');
+  el.classList.add('flash');
+  setTimeout(() => el.classList.remove('flash'), 100);
+}
+
+document.addEventListener('keydown', e => {
+  if (document.querySelector('.modal-overlay.open')) return;
+  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); increment(); }
+  if (e.key === 'ArrowRight') selectItem(Math.min(current+1, ITEMS.length-1));
+  if (e.key === 'ArrowLeft')  selectItem(Math.max(current-1, 0));
+  if (e.key === 'ArrowUp')    adjust(1);
+  if (e.key === 'ArrowDown')  adjust(-1);
+});
+
+// ══════════════════════════════════════════════════════════
+// Log
+// ══════════════════════════════════════════════════════════
+function pushLog() {
+  const it = ITEMS[current];
+  const ts = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  sessionLog.unshift({ name:it.name, count:it.count, unit:it.unit, photos:it.photos.length, time:ts });
+  if (sessionLog.length > 60) sessionLog.pop();
+  renderLog();
+}
+function renderLog() {
+  const el = document.getElementById('logEntries');
+  if (!sessionLog.length) { el.innerHTML = '<span class="log-empty">No counts yet this session.</span>'; return; }
+  el.innerHTML = sessionLog.map(e =>
+    `<div class="log-entry">
+      <span class="log-name">${e.name}</span>
+      <span class="log-count">${e.count} ${e.unit}</span>
+      ${e.photos ? `<span class="log-cam">📷 ${e.photos}</span>` : ''}
+      <span class="log-time">${e.time}</span>
+    </div>`
+  ).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+// Reset
+// ══════════════════════════════════════════════════════════
+function resetCurrent() {
+  if (!confirm(`Reset "${ITEMS[current].name}" count to 0?`)) return;
+  ITEMS[current].count = 0; renderFace(); showToast('Count reset to 0');
+}
+
+// ══════════════════════════════════════════════════════════
+// Camera / Photos
+// ══════════════════════════════════════════════════════════
+document.getElementById('photoInput').addEventListener('change', function() {
+  const file = this.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => { ITEMS[current].photos.push(e.target.result); renderFace(); pushLog(); showToast('Photo added'); };
+  reader.readAsDataURL(file); this.value = '';
+});
+function triggerCamera() { document.getElementById('photoInput').click(); }
+function removePhoto(idx) { ITEMS[current].photos.splice(idx,1); renderFace(); showToast('Photo removed'); }
+function viewPhoto(src) { document.getElementById('photoViewImg').src = src; document.getElementById('photoView').classList.add('open'); }
+function closePhotoView() { document.getElementById('photoView').classList.remove('open'); }
+
+// ══════════════════════════════════════════════════════════
+// Unit chips
+// ══════════════════════════════════════════════════════════
+function buildUnitChips(containerId, targetInputId) {
+  const c = document.getElementById(containerId);
+  c.innerHTML = UNIT_GROUPS.flatMap(g =>
+    g.units.map(u =>
+      `<span class="unit-chip" title="${g.label}" onclick="applyUnit('${targetInputId}','${u}')">${u}</span>`
+    )
+  ).join('');
+}
+function applyUnit(inputId, unit) {
+  document.getElementById(inputId).value = unit;
+}
+
+// ══════════════════════════════════════════════════════════
+// Source chips
+// ══════════════════════════════════════════════════════════
+function setChip(el, ctx) {
+  el.closest('.chip-row').querySelectorAll('.chip').forEach(c => c.classList.remove('sel'));
+  el.classList.add('sel');
+  chipSources[ctx] = el.dataset.src;
+}
+function applyChips(ctx, src) {
+  const modalId = ctx === 'add' ? 'addModal' : 'editModal';
+  document.getElementById(modalId).querySelectorAll('.chip').forEach(c => {
+    c.classList.toggle('sel', c.dataset.src === src);
+  });
+  chipSources[ctx] = src;
+}
+
+// ══════════════════════════════════════════════════════════
+// Add item
+// ══════════════════════════════════════════════════════════
+function openAddModal() {
+  closeModals();
+  openModal('addModal');
+  setTimeout(() => document.getElementById('newName').focus(), 120);
+}
+function addItem() {
+  const name = document.getElementById('newName').value.trim();
+  if (!name) { showToast('Enter an item name'); return; }
+  const unit = document.getElementById('newUnit').value.trim() || 'units';
+  const key  = document.getElementById('newKey').value.trim()  || chipSources.add.toLowerCase()+'.'+name.toLowerCase().replace(/\s+/g,'_');
+  ITEMS.push({ id:'c_'+Date.now(), name, unit, key, count:0, source:chipSources.add, photos:[], hint:'' });
+  closeModals();
+  selectItem(ITEMS.length - 1);
+  showToast(`"${name}" added`);
+  ['newName','newUnit','newKey'].forEach(id => document.getElementById(id).value = '');
+}
+
+// ══════════════════════════════════════════════════════════
+// Edit item
+// ══════════════════════════════════════════════════════════
+function openEditModal(i) {
+  editIndex = i;
+  const it = ITEMS[i];
+  document.getElementById('editModalSub').textContent =
+    `Count: ${it.count} ${it.unit}${it.photos.length ? '  ·  📷 ' + it.photos.length + ' photo(s)' : ''}`;
+  document.getElementById('editName').value = it.name;
+  document.getElementById('editUnit').value = it.unit;
+  document.getElementById('editKey').value  = it.key;
+  applyChips('edit', it.source);
+  buildUnitChips('editUnitChips', 'editUnit');
+  closeModals();
+  openModal('editModal');
+  setTimeout(() => document.getElementById('editName').focus(), 120);
+}
+function saveEdit() {
+  if (editIndex < 0 || editIndex >= ITEMS.length) return;
+  const name = document.getElementById('editName').value.trim();
+  if (!name) { showToast('Name cannot be empty'); return; }
+  const it = ITEMS[editIndex];
+  it.name   = name;
+  it.unit   = document.getElementById('editUnit').value.trim() || it.unit;
+  it.key    = document.getElementById('editKey').value.trim()  || it.key;
+  it.source = chipSources.edit;
+  closeModals();
+  renderTabs(); renderFace();
+  showToast(`"${name}" saved`);
+  editIndex = -1;
+}
+function removeItemEdit() {
+  if (editIndex < 0) return;
+  const name = ITEMS[editIndex].name;
+  if (!confirm(`Remove "${name}"?\n\nCount and photos will be cleared.`)) return;
+  ITEMS.splice(editIndex, 1);
+  if (current >= ITEMS.length) current = Math.max(0, ITEMS.length - 1);
+  closeModals(); renderTabs(); renderFace();
+  showToast(`"${name}" removed`);
+  editIndex = -1;
+}
+
+// ══════════════════════════════════════════════════════════
+// Manage list
+// ══════════════════════════════════════════════════════════
+function renderManageList() {
+  const list = document.getElementById('manageList');
+  if (!ITEMS.length) {
+    list.innerHTML = '<div style="font-size:13px;color:var(--hint);text-align:center;padding:20px 0">No items yet. Tap "+ Add".</div>';
+    return;
+  }
+  // SVG icons inlined for pencil & trash
+  const pencilSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+  const trashSvg  = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+
+  list.innerHTML = ITEMS.map((it,i) =>
+    `<div class="item-row">
+      <div class="item-row-info">
+        <div class="item-row-name">${it.name}</div>
+        <div class="item-row-meta">${it.source} · ${it.unit}${it.photos.length ? ' · 📷 '+it.photos.length : ''}</div>
+      </div>
+      <span class="item-row-count">${it.count}&thinsp;<span style="font-size:10px;font-weight:400;color:var(--hint)">${it.unit}</span></span>
+      <button class="icon-btn edit" onclick="openEditModal(${i})" title="Edit">${pencilSvg}</button>
+      <button class="icon-btn del"  onclick="removeItemDirect(${i})" title="Remove">${trashSvg}</button>
+    </div>`
+  ).join('');
+}
+
+function removeItemDirect(i) {
+  const name = ITEMS[i].name;
+  if (!confirm(`Remove "${name}"?\n\nCount and photos will be cleared.`)) return;
+  ITEMS.splice(i, 1);
+  if (current >= ITEMS.length) current = Math.max(0, ITEMS.length - 1);
+  renderManageList(); renderTabs(); renderFace();
+  showToast(`"${name}" removed`);
+}
+
+// ══════════════════════════════════════════════════════════
+// Sync / Export
+// ══════════════════════════════════════════════════════════
+function buildPayload() {
+  return {
+    source: 'farm-counter', app_version: '1.2',
+    synced_at: new Date().toISOString(),
+    target: document.getElementById('targetSys')?.value || 'farmos',
+    counts: ITEMS.filter(it => it.count > 0 || it.photos.length > 0).map(it => ({
+      key: it.key, label: it.name, count: it.count, unit: it.unit,
+      source: it.source, photos: it.photos.length, photo_data: it.photos
+    }))
+  };
+}
+function openSyncModal() {
+  const p = buildPayload();
+  const preview = { ...p, counts: p.counts.map(c => ({
+    ...c, photo_data: c.photo_data.length ? [`[${c.photo_data.length} image(s) — base64]`] : []
+  }))};
+  document.getElementById('payloadBox').textContent = JSON.stringify(preview, null, 2);
+  openModal('syncModal');
+}
+function copyJSON() {
+  const txt = JSON.stringify(buildPayload(), null, 2);
+  if (navigator.clipboard) { navigator.clipboard.writeText(txt).then(() => showToast('JSON copied to clipboard')); }
+  else {
+    const ta = Object.assign(document.createElement('textarea'),{value:txt});
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+    showToast('JSON copied');
+  }
+}
+async function doSync() {
+  const addr = document.getElementById('boxAddr').value.trim();
+  const tok  = document.getElementById('authTok').value.trim();
+  const headers = {'Content-Type':'application/json'};
+  if (tok) headers['Authorization'] = 'Bearer '+tok;
+  const dot = document.getElementById('dotEl'), stat = document.getElementById('syncStatus');
+  dot.style.background = '#EF9F27'; stat.textContent = 'Syncing…'; closeModals();
+  try {
+    const res = await fetch(addr+'/api/counts', {method:'POST', headers, body:JSON.stringify(buildPayload())});
+    if (res.ok) {
+      dot.style.background = '#1D9E75';
+      stat.textContent = 'Synced · '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      showToast('Synced to FarmHack Box ✓');
+    } else { throw new Error('HTTP '+res.status); }
+  } catch(err) {
+    dot.style.background = '#D85A30'; stat.textContent = 'Sync failed — offline';
+    showToast('Offline · copy JSON to sync manually'); openSyncModal();
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// Modal helpers
+// ══════════════════════════════════════════════════════════
+function openModal(id) {
+  if (id === 'manageModal') renderManageList();
+  if (id === 'addModal')    buildUnitChips('addUnitChips', 'newUnit');
+  document.getElementById(id).classList.add('open');
+}
+function closeModals() { document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('open')); }
+function maybeClose(e, id) { if (e.target === document.getElementById(id)) closeModals(); }
+
+// ══════════════════════════════════════════════════════════
+// Toast
+// ══════════════════════════════════════════════════════════
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// Boot
+renderTabs(); renderFace();
+</script>
+</body>
+</html>
