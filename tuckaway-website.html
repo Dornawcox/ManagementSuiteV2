@@ -1,0 +1,1604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tuckaway Food Commons | Lee, New Hampshire</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@300;400;500;600;700&family=Crimson+Pro:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* Brand Colors */
+      --text: #232323;
+      --text-light: #4a4a4a;
+      --text-muted: #6b6b6b;
+      --bg-dark: #b1bea1;
+      --bg-light: #ebf2e3;
+      --accent: #dec15a;
+      --white: #ffffff;
+      --black: #232323;
+      
+      /* Derived Colors */
+      --bg-darker: #95a686;
+      --accent-dark: #c9ad4a;
+      --border: #c5d1b8;
+      
+      --font-display: 'Josefin Sans', sans-serif;
+      --font-body: 'Crimson Pro', Georgia, serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; font-size: 16px; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg-light);
+      color: var(--text);
+      line-height: 1.75;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+      font-family: var(--font-display);
+      font-weight: 300;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      line-height: 1.3;
+      color: var(--text);
+    }
+
+    h2 { font-size: clamp(1.8rem, 4vw, 2.8rem); }
+    h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); font-weight: 400; }
+    p { font-size: 1.1rem; color: var(--text-light); }
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; height: auto; display: block; }
+
+    .container { max-width: 1300px; margin: 0 auto; padding: 0 2rem; }
+    section { padding: 7rem 0; }
+
+    /* Grain texture */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      opacity: 0.02;
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ==================== NAVIGATION ==================== */
+    .nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      padding: 1.5rem 0;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .nav.scrolled {
+      background: rgba(235, 242, 227, 0.97);
+      backdrop-filter: blur(20px);
+      padding: 1rem 0;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.05);
+    }
+
+    .nav-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 2rem;
+    }
+
+    /* TEXT LOGO - Transparent background, aligned widths */
+    .logo {
+      font-family: var(--font-display);
+      text-transform: uppercase;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      line-height: 1.1;
+      transition: opacity 0.3s;
+    }
+
+    .logo:hover { opacity: 0.7; }
+
+    .logo-main {
+      font-weight: 600;
+      font-size: 1.4rem;
+      letter-spacing: 0.12em;
+    }
+
+    .logo-sub {
+      font-weight: 400;
+      font-size: 0.82rem;
+      letter-spacing: 0.32em;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 3rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-family: var(--font-display);
+      font-size: 0.75rem;
+      font-weight: 400;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text);
+      position: relative;
+      padding: 0.5rem 0;
+    }
+
+    .nav-links a::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 0;
+      height: 1px;
+      background: var(--text);
+      transition: width 0.3s ease;
+    }
+
+    .nav-links a:hover::after { width: 100%; }
+
+    .nav-cta {
+      font-family: var(--font-display);
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      padding: 0.8rem 1.8rem;
+      border: 1px solid var(--text);
+      transition: all 0.3s ease;
+    }
+
+    .nav-cta:hover {
+      background: var(--text);
+      color: var(--white);
+    }
+
+    .mobile-toggle {
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 5px;
+    }
+
+    .mobile-toggle span {
+      width: 24px;
+      height: 1.5px;
+      background: var(--text);
+    }
+
+    /* ==================== HERO ==================== */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      background: var(--bg-light);
+      overflow: hidden;
+    }
+
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+    }
+
+    .hero-bg-shape {
+      position: absolute;
+      border-radius: 50%;
+      opacity: 0.15;
+    }
+
+    .hero-bg-shape.shape-1 {
+      width: 800px;
+      height: 800px;
+      background: var(--bg-dark);
+      top: -200px;
+      right: -200px;
+    }
+
+    .hero-bg-shape.shape-2 {
+      width: 500px;
+      height: 500px;
+      background: var(--accent);
+      opacity: 0.1;
+      bottom: -100px;
+      left: -100px;
+    }
+
+    .hero-content {
+      text-align: center;
+      max-width: 950px;
+      padding: 2rem;
+      z-index: 1;
+    }
+
+    .hero-tag {
+      font-family: var(--font-display);
+      font-size: 0.75rem;
+      font-weight: 400;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 2rem;
+    }
+
+    /* REDUCED HEADLINE - 50% smaller */
+    .hero h1 {
+      font-size: clamp(1.25rem, 3vw, 2.25rem);
+      margin-bottom: 2rem;
+      font-weight: 300;
+      letter-spacing: 0.2em;
+    }
+
+    .hero h1 span {
+      display: block;
+      font-weight: 500;
+    }
+
+    .hero-description {
+      font-size: 1.25rem;
+      max-width: 600px;
+      margin: 0 auto 3rem;
+      line-height: 1.9;
+    }
+
+    .hero-cta {
+      display: flex;
+      gap: 1.5rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      font-family: var(--font-display);
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      padding: 1.1rem 2.5rem;
+      border: 1px solid var(--text);
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn:hover {
+      background: var(--text);
+      color: var(--white);
+    }
+
+    .btn-filled {
+      background: var(--text);
+      color: var(--white);
+    }
+
+    .btn-filled:hover {
+      background: transparent;
+      color: var(--text);
+    }
+
+    .scroll-hint {
+      position: absolute;
+      bottom: 3rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .scroll-hint span {
+      font-family: var(--font-display);
+      font-size: 0.65rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .scroll-line {
+      width: 1px;
+      height: 50px;
+      background: linear-gradient(to bottom, var(--text-muted), transparent);
+      animation: scrollPulse 2s infinite;
+    }
+
+    @keyframes scrollPulse {
+      0%, 100% { transform: scaleY(1); opacity: 1; }
+      50% { transform: scaleY(0.6); opacity: 0.5; }
+    }
+
+    /* ==================== LITHOGRAPH ICONS ==================== */
+    .litho-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 1.5rem;
+    }
+
+    .litho-icon svg {
+      width: 100%;
+      height: 100%;
+      stroke: var(--text);
+      stroke-width: 1;
+      fill: none;
+    }
+
+    /* ==================== INTRO GRID ==================== */
+    .intro {
+      background: var(--white);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 0;
+    }
+
+    .intro-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+    }
+
+    .intro-card {
+      padding: 3.5rem 2rem;
+      text-align: center;
+      border-right: 1px solid var(--border);
+      transition: background 0.3s ease;
+    }
+
+    .intro-card:last-child { border-right: none; }
+    .intro-card:hover { background: var(--bg-light); }
+
+    .intro-card h3 {
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+      letter-spacing: 0.12em;
+    }
+
+    .intro-card p {
+      font-size: 0.95rem;
+      line-height: 1.7;
+    }
+
+    /* ==================== ABOUT ==================== */
+    .about { background: var(--bg-light); }
+
+    .about-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6rem;
+      align-items: center;
+    }
+
+    .about-image { position: relative; }
+
+    .about-image img {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 4/5;
+      object-fit: cover;
+      object-position: center;
+      border-radius: 4px;
+    }
+
+    .about-image-accent {
+      position: absolute;
+      width: 60%;
+      height: 60%;
+      border: 1px solid var(--accent);
+      border-radius: 4px;
+      bottom: -2rem;
+      right: -2rem;
+      z-index: -1;
+    }
+
+    .section-label {
+      font-family: var(--font-display);
+      font-size: 0.7rem;
+      font-weight: 400;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--accent-dark);
+      margin-bottom: 1.5rem;
+      display: block;
+    }
+
+    .about-content h2 { margin-bottom: 2rem; }
+    .about-content p { margin-bottom: 1.5rem; }
+
+    .about-quote {
+      background: var(--white);
+      padding: 2rem 2.5rem;
+      border-left: 3px solid var(--accent);
+      margin: 2.5rem 0;
+      font-style: italic;
+      font-size: 1.15rem;
+      line-height: 1.9;
+    }
+
+    /* ==================== FARM STORE ==================== */
+    .farm-store { background: var(--white); }
+
+    .store-header {
+      text-align: center;
+      margin-bottom: 5rem;
+    }
+
+    .store-header h2 { margin-bottom: 1.5rem; }
+
+    .store-header p {
+      max-width: 650px;
+      margin: 0 auto;
+      font-size: 1.15rem;
+    }
+
+    .store-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 4rem;
+      align-items: start;
+    }
+
+    .store-image img {
+      width: 100%;
+      aspect-ratio: 5/4;
+      object-fit: cover;
+      object-position: center;
+      border-radius: 4px;
+    }
+
+    .store-info { padding-top: 1rem; }
+
+    .hours-block {
+      background: var(--bg-light);
+      padding: 2.5rem;
+      border-radius: 4px;
+      margin-bottom: 2rem;
+    }
+
+    .hours-block h3 {
+      font-size: 0.8rem;
+      margin-bottom: 1.5rem;
+      color: var(--accent-dark);
+    }
+
+    .hours-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 1rem 0;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+      letter-spacing: 0.05em;
+    }
+
+    .hours-row:last-child { border-bottom: none; }
+
+    .hours-label {
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .hours-time { color: var(--text-muted); }
+
+    .store-mission h3 { margin-bottom: 1rem; }
+    .store-mission p { margin-bottom: 1.5rem; }
+
+    .vendor-cta {
+      background: var(--text);
+      color: var(--white);
+      padding: 2.5rem;
+      border-radius: 4px;
+      margin-top: 2rem;
+    }
+
+    .vendor-cta h3 {
+      color: var(--white);
+      margin-bottom: 0.75rem;
+      font-weight: 400;
+    }
+
+    .vendor-cta p {
+      color: rgba(255,255,255,0.7);
+      margin-bottom: 1.5rem;
+      font-size: 1rem;
+    }
+
+    .vendor-cta .btn {
+      border-color: var(--white);
+      color: var(--white);
+    }
+
+    .vendor-cta .btn:hover {
+      background: var(--white);
+      color: var(--text);
+    }
+
+    /* ==================== EVENTS ==================== */
+    .events {
+      background: var(--text);
+      color: var(--white);
+    }
+
+    .events .section-label { color: var(--accent); }
+
+    .events-header {
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+
+    .events-header h2 {
+      color: var(--white);
+      margin-bottom: 1rem;
+    }
+
+    .events-header p {
+      color: rgba(255,255,255,0.6);
+      max-width: 500px;
+      margin: 0 auto;
+    }
+
+    .events-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 2rem;
+    }
+
+    .event-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 4px;
+      padding: 2.5rem;
+      transition: all 0.3s ease;
+    }
+
+    .event-card:hover {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.15);
+    }
+
+    .event-date {
+      display: inline-block;
+      font-family: var(--font-display);
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      background: var(--accent);
+      color: var(--text);
+      padding: 0.5rem 1rem;
+      border-radius: 2px;
+      margin-bottom: 1.5rem;
+    }
+
+    .event-card h3 {
+      color: var(--white);
+      font-size: 1.4rem;
+      font-weight: 400;
+      margin-bottom: 1rem;
+      text-transform: none;
+      letter-spacing: 0.02em;
+    }
+
+    .event-card p {
+      color: rgba(255,255,255,0.65);
+      line-height: 1.7;
+    }
+
+    .event-meta {
+      display: flex;
+      gap: 2rem;
+      margin-top: 1.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      font-family: var(--font-display);
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.4);
+    }
+
+    /* ==================== TUCKAWAY FARM ==================== */
+    .farm {
+      background: var(--bg-dark);
+      color: var(--text);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .farm::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0v60M0 30h60' stroke='%23fff' stroke-opacity='0.05' fill='none'/%3E%3C/svg%3E");
+    }
+
+    .farm .container {
+      position: relative;
+      z-index: 1;
+    }
+
+    .farm-header {
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+
+    .farm-header h2 {
+      color: var(--text);
+      margin-bottom: 1.5rem;
+    }
+
+    .farm-header p {
+      color: var(--text-light);
+      max-width: 750px;
+      margin: 0 auto;
+      font-size: 1.15rem;
+    }
+
+    .farm .section-label { color: var(--accent-dark); }
+
+    .farm-images {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      margin-bottom: 4rem;
+    }
+
+    .farm-images img {
+      width: 100%;
+      aspect-ratio: 4/3;
+      object-fit: cover;
+      border-radius: 4px;
+    }
+
+    /* Specific image positioning */
+    .farm-images img.img-blueberry-rows {
+      object-position: center 40%;
+    }
+
+    .farm-images img.img-chickens {
+      object-position: center bottom;
+    }
+
+    .farm-images img.img-landscape {
+      object-position: center;
+    }
+
+    .farm-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2rem;
+    }
+
+    .farm-card {
+      background: rgba(255,255,255,0.5);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.6);
+      border-radius: 4px;
+      padding: 2.5rem;
+    }
+
+    .farm-card .litho-icon {
+      margin-bottom: 1.5rem;
+    }
+
+    .farm-card .litho-icon svg {
+      stroke: var(--text);
+    }
+
+    .farm-card h3 {
+      color: var(--text);
+      font-size: 0.9rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .farm-card p {
+      color: var(--text-light);
+      margin-bottom: 1rem;
+    }
+
+    .farm-card ul {
+      list-style: none;
+      margin-top: 1rem;
+    }
+
+    .farm-card li {
+      color: var(--text-light);
+      padding: 0.4rem 0;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .farm-card li::before {
+      content: '→';
+      color: var(--accent-dark);
+      font-family: var(--font-display);
+    }
+
+    /* ==================== PARTNERS ==================== */
+    .partners { background: var(--bg-light); }
+
+    .partners-header {
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+
+    .partners-header h2 { margin-bottom: 1rem; }
+
+    .partners-header p {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .partners-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2rem;
+    }
+
+    .partner-card {
+      background: var(--white);
+      padding: 2.5rem;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      transition: all 0.3s ease;
+    }
+
+    .partner-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 15px 40px rgba(0,0,0,0.06);
+    }
+
+    .partner-card h3 {
+      font-size: 1rem;
+      font-weight: 500;
+      margin-bottom: 1rem;
+      text-transform: none;
+      letter-spacing: 0.02em;
+    }
+
+    .partner-card p {
+      font-size: 0.95rem;
+      line-height: 1.7;
+      margin-bottom: 1rem;
+    }
+
+    .partner-link {
+      font-family: var(--font-display);
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent-dark);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: gap 0.3s ease;
+    }
+
+    .partner-link:hover { gap: 0.75rem; }
+
+    /* ==================== RENT SPACE ==================== */
+    .spaces { background: var(--white); }
+
+    .spaces-header {
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+
+    .spaces-header h2 { margin-bottom: 1rem; }
+
+    .spaces-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 3rem;
+    }
+
+    .space-card {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .space-card img {
+      width: 100%;
+      height: 280px;
+      object-fit: cover;
+    }
+
+    /* Emerson house - show interior */
+    .space-card img.img-emerson {
+      object-position: center;
+    }
+
+    /* Farm-a-Q - show crowd at bottom */
+    .space-card img.img-farmaq {
+      object-position: center bottom;
+    }
+
+    .space-content { padding: 2.5rem; }
+
+    .space-content h3 {
+      font-size: 1.1rem;
+      font-weight: 500;
+      margin-bottom: 1rem;
+      text-transform: none;
+      letter-spacing: 0.02em;
+    }
+
+    .space-content p { margin-bottom: 1.5rem; }
+
+    .space-features {
+      list-style: none;
+      margin-bottom: 2rem;
+    }
+
+    .space-features li {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+      font-size: 0.95rem;
+      color: var(--text-light);
+    }
+
+    .space-features li::before {
+      content: '✓';
+      color: var(--bg-darker);
+      font-weight: bold;
+    }
+
+    /* ==================== VISIT ==================== */
+    .visit {
+      background: var(--text);
+      color: var(--white);
+    }
+
+    .visit .section-label { color: var(--accent); }
+
+    .visit-header {
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+
+    .visit-header h2 { color: var(--white); }
+
+    .visit-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 3rem;
+    }
+
+    .visit-card {
+      text-align: center;
+      padding: 2rem;
+    }
+
+    .visit-card .litho-icon svg {
+      stroke: var(--accent);
+    }
+
+    .visit-card h3 {
+      color: var(--accent);
+      font-size: 0.85rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .visit-card p {
+      color: rgba(255,255,255,0.7);
+      line-height: 1.8;
+    }
+
+    .visit-card strong {
+      color: var(--white);
+      font-weight: 500;
+    }
+
+    /* ==================== GET INVOLVED ==================== */
+    .involve { background: var(--bg-light); }
+
+    .involve-header {
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+
+    .involve-header h2 { margin-bottom: 1rem; }
+
+    .involve-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2rem;
+    }
+
+    .involve-card {
+      background: var(--white);
+      padding: 3rem 2.5rem;
+      border-radius: 4px;
+      text-align: center;
+      border: 1px solid var(--border);
+      transition: all 0.3s ease;
+    }
+
+    .involve-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-5px);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.08);
+    }
+
+    .involve-card h3 {
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+
+    .involve-card p {
+      margin-bottom: 1.5rem;
+      font-size: 0.95rem;
+    }
+
+    /* ==================== INTEGRATION NOTICE ==================== */
+    .integration-notice {
+      background: var(--text);
+      padding: 2rem 0;
+      text-align: center;
+    }
+
+    .integration-notice p {
+      font-family: var(--font-display);
+      font-size: 0.75rem;
+      letter-spacing: 0.15em;
+      color: rgba(255,255,255,0.5);
+    }
+
+    .integration-notice a {
+      color: var(--accent);
+      border-bottom: 1px solid transparent;
+      transition: border-color 0.3s;
+    }
+
+    .integration-notice a:hover { border-color: var(--accent); }
+
+    /* ==================== COMPACT FOOTER ==================== */
+    footer {
+      background: var(--text);
+      color: var(--white);
+      padding: 2rem 0;
+    }
+
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+
+    /* Footer text logo - matches nav but inverted */
+    .footer-logo {
+      font-family: var(--font-display);
+      text-transform: uppercase;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.1;
+    }
+
+    .footer-logo .logo-main {
+      font-weight: 600;
+      font-size: 1rem;
+      letter-spacing: 0.12em;
+      color: var(--white);
+    }
+
+    .footer-logo .logo-sub {
+      font-weight: 400;
+      font-size: 0.58rem;
+      letter-spacing: 0.32em;
+      color: rgba(255,255,255,0.7);
+    }
+
+    .footer-nav {
+      display: flex;
+      gap: 2.5rem;
+      list-style: none;
+    }
+
+    .footer-nav a {
+      font-family: var(--font-display);
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.5);
+      transition: color 0.3s;
+    }
+
+    .footer-nav a:hover { color: var(--white); }
+
+    .footer-legal {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .footer-legal span {
+      font-family: var(--font-display);
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.35);
+    }
+
+    .footer-legal a {
+      font-family: var(--font-display);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.35);
+      transition: color 0.3s;
+    }
+
+    .footer-legal a:hover { color: var(--white); }
+
+    /* ==================== RESPONSIVE ==================== */
+    @media (max-width: 1024px) {
+      .intro-grid { grid-template-columns: repeat(2, 1fr); }
+      .intro-card { border-bottom: 1px solid var(--border); }
+      .intro-card:nth-child(2) { border-right: none; }
+      .intro-card:nth-child(3), .intro-card:nth-child(4) { border-bottom: none; }
+      .partners-grid, .farm-grid, .involve-grid { grid-template-columns: repeat(2, 1fr); }
+      .farm-images { grid-template-columns: 1fr 1fr; }
+      .farm-images img:last-child { display: none; }
+    }
+
+    @media (max-width: 768px) {
+      section { padding: 5rem 0; }
+      .nav-links, .nav-cta { display: none; }
+      .mobile-toggle { display: flex; }
+      
+      .intro-grid, .about-grid, .store-grid, .events-grid,
+      .partners-grid, .farm-grid, .spaces-grid, .visit-grid,
+      .involve-grid { grid-template-columns: 1fr; }
+      
+      .intro-card { border-right: none; }
+      .about-grid { gap: 3rem; }
+      .farm-images { grid-template-columns: 1fr; }
+      .farm-images img:last-child { display: block; }
+      
+      .footer-inner { flex-direction: column; text-align: center; }
+      .footer-nav { flex-wrap: wrap; justify-content: center; gap: 1.5rem; }
+      .footer-legal { flex-direction: column; gap: 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="nav" id="nav">
+    <div class="nav-inner">
+      <a href="#" class="logo">
+        <span class="logo-main">Tuckaway</span>
+        <span class="logo-sub">Food Commons</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#about">About</a></li>
+        <li><a href="#store">Farm Store</a></li>
+        <li><a href="#farm">The Farm</a></li>
+        <li><a href="#events">Events</a></li>
+        <li><a href="#spaces">Spaces</a></li>
+        <li><a href="#partners">Partners</a></li>
+      </ul>
+      <a href="#visit" class="nav-cta">Visit Us</a>
+      <button class="mobile-toggle" aria-label="Menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero" id="home">
+    <div class="hero-bg">
+      <div class="hero-bg-shape shape-1"></div>
+      <div class="hero-bg-shape shape-2"></div>
+    </div>
+    <div class="hero-content">
+      <p class="hero-tag">Lee, New Hampshire</p>
+      <h1>Cultivating<br><span>Community</span><br>Through Local Food</h1>
+      <p class="hero-description">
+        A community-rooted food hub bringing together farms, food producers, educators, nonprofits, and neighbors to strengthen a resilient Seacoast food system.
+      </p>
+      <div class="hero-cta">
+        <a href="#store" class="btn btn-filled">Farm Store</a>
+        <a href="#about" class="btn">Learn More</a>
+      </div>
+    </div>
+    <div class="scroll-hint">
+      <span>Scroll</span>
+      <div class="scroll-line"></div>
+    </div>
+  </section>
+
+  <!-- Intro Grid -->
+  <section class="intro">
+    <div class="intro-grid">
+      <div class="intro-card">
+        <div class="litho-icon">
+          <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+            <path d="M24 4c-6 0-10 8-10 16s4 12 10 12 10-4 10-12S30 4 24 4z"/>
+            <path d="M24 32v12M18 44h12"/>
+            <path d="M14 20c-4 0-6 4-6 8s2 6 6 6"/>
+            <path d="M34 20c4 0 6 4 6 8s-2 6-6 6"/>
+          </svg>
+        </div>
+        <h3>Farm Store</h3>
+        <p>Collaborative local food market featuring regional growers and producers. Open daily for members.</p>
+      </div>
+      <div class="intro-card">
+        <div class="litho-icon">
+          <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 44V20l16-16 16 16v24H8z"/>
+            <path d="M18 44V30h12v14"/>
+            <path d="M4 22l20-18 20 18"/>
+          </svg>
+        </div>
+        <h3>Community Spaces</h3>
+        <p>Indoor and outdoor spaces for workshops, meetings, retreats, and private events.</p>
+      </div>
+      <div class="intro-card">
+        <div class="litho-icon">
+          <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="24" cy="38" rx="16" ry="6"/>
+            <path d="M8 38V28c0-8 7-14 16-14s16 6 16 14v10"/>
+            <path d="M24 14V6"/>
+            <path d="M18 10l6-4 6 4"/>
+          </svg>
+        </div>
+        <h3>Commercial Kitchen</h3>
+        <p>Breaking ground Spring 2026. Certified commercial kitchen for local food producers.</p>
+      </div>
+      <div class="intro-card">
+        <div class="litho-icon">
+          <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+            <path d="M24 44c-8-6-16-12-16-22 0-8 6-14 12-14 3 0 4 2 4 2s1-2 4-2c6 0 12 6 12 14 0 10-8 16-16 22z"/>
+            <path d="M24 20v8M20 24h8"/>
+          </svg>
+        </div>
+        <h3>Community Gardens</h3>
+        <p>Annual memberships for 20×20' garden plots with shared tools and water access.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- About - SHEEP PHOTO -->
+  <section class="about" id="about">
+    <div class="container">
+      <div class="about-grid">
+        <div class="about-image">
+          <img src="sheep.jpg" alt="Sheep at Tuckaway Farm" loading="lazy">
+          <div class="about-image-accent"></div>
+        </div>
+        <div class="about-content">
+          <span class="section-label">About Us</span>
+          <h2>Growing Together</h2>
+          <p>
+            The Cox family has farmed this land for decades, stewarding fields and forest "tucked away" along the Oyster River. What began as a homestead has grown into a vibrant community food hub.
+          </p>
+          <div class="about-quote">
+            "We aim to help grow and support community within a vibrant local food system by cultivating shared resources for viable farm and food enterprises, community gardens, food access and mutual aid programs, broad-ranging learning opportunities, and third space gatherings."
+          </div>
+          <p>
+            We envision a resilient and connected community space where everyone is empowered to access healthy food, where local farmers are supported and the land is nourished.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Farm Store - BLUEBERRIES PHOTO -->
+  <section class="farm-store" id="store">
+    <div class="container">
+      <div class="store-header">
+        <span class="section-label">Shop Local</span>
+        <h2>Farm Store</h2>
+        <p>Our collaborative market supports small and mid-scale local farms by providing a vibrant, membership-based retail space with transparently sourced healthful food.</p>
+      </div>
+      <div class="store-grid">
+        <div class="store-image">
+          <img src="blueberries.jpg" alt="Fresh blueberries from Tuckaway Farm" loading="lazy">
+        </div>
+        <div class="store-info">
+          <div class="hours-block">
+            <h3>Hours</h3>
+            <div class="hours-row">
+              <span class="hours-label">Member Hours</span>
+              <span class="hours-time">Daily 8am – 7pm</span>
+            </div>
+            <div class="hours-row">
+              <span class="hours-label">Public Hours</span>
+              <span class="hours-time">Fridays 10am – 6pm</span>
+            </div>
+          </div>
+          <div class="store-mission">
+            <h3>Our Mission</h3>
+            <p>As members, we are not just vendors and customers — we are stewards of a shared food commons. Membership strengthens local farms and keeps fresh food accessible for all.</p>
+            <p>Together, we invest in healthy soil, thriving farms, and community resilience.</p>
+          </div>
+          <div class="vendor-cta">
+            <h3>Become a Vendor</h3>
+            <p>We support beginning and historically marginalized growers with access to our market.</p>
+            <a href="#" class="btn">Connect With Us</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Events -->
+  <section class="events" id="events">
+    <div class="container">
+      <div class="events-header">
+        <span class="section-label">What's Happening</span>
+        <h2>Upcoming Events</h2>
+        <p>Join us for workshops, celebrations, and community gatherings throughout the season.</p>
+      </div>
+      <div class="events-grid">
+        <div class="event-card">
+          <span class="event-date">June 28, 2026</span>
+          <h3>Farm-a-Q</h3>
+          <p>A day of celebration, education, and delicious local food! Sample dishes from local chefs, learn about heritage crops, meet farmers, and enjoy family-friendly activities.</p>
+          <div class="event-meta">
+            <span>📍 Tuckaway Farm</span>
+            <span>🕐 12pm – 5pm</span>
+          </div>
+        </div>
+        <div class="event-card">
+          <span class="event-date">Monthly Series</span>
+          <h3>Wild & Weedy Wellness</h3>
+          <p>Step into nature's apothecary with herbalist Alison Magill! Explore medicinal plants and create herbal remedies for your home apothecary.</p>
+          <div class="event-meta">
+            <span>📍 Emerson House</span>
+            <span>🕐 1pm – 4pm</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tuckaway Farm - UPDATED PHOTOS -->
+  <section class="farm" id="farm">
+    <div class="container">
+      <div class="farm-header">
+        <span class="section-label">The Land</span>
+        <h2>Tuckaway Farm</h2>
+        <p>We grow food for the Seacoast area of New Hampshire and Maine with a commitment to no/low-till practices for soil and climate health. Honored as NOFA-NH Leading Organic Farmers of the Year in 2024.</p>
+      </div>
+      <div class="farm-images">
+        <img src="blueberry-rows.jpg" alt="Walking through blueberry rows" class="img-blueberry-rows" loading="lazy">
+        <img src="chickens.jpg" alt="Pastured chickens at Tuckaway Farm" class="img-chickens" loading="lazy">
+        <img src="farm-landscape.jpg" alt="Tuckaway Farm landscape" class="img-landscape" loading="lazy">
+      </div>
+      <div class="farm-grid">
+        <div class="farm-card">
+          <div class="litho-icon">
+            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="24" cy="24" r="18"/>
+              <path d="M24 6v36M6 24h36"/>
+              <path d="M12 12l24 24M36 12L12 36"/>
+            </svg>
+          </div>
+          <h3>Regenerative Practices</h3>
+          <p>Building healthy soil, food, and community through holistic land management.</p>
+          <ul>
+            <li>Relationship-Based, Collaborative</li>
+            <li>Climate Resilient & Adaptive</li>
+            <li>Research & Education Oriented</li>
+          </ul>
+        </div>
+        <div class="farm-card">
+          <div class="litho-icon">
+            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <path d="M24 4v40"/>
+              <path d="M24 8c-6 1-10 6-10 10s4 6 10 6"/>
+              <path d="M24 18c6 1 10 6 10 10s-4 6-10 6"/>
+              <path d="M24 28c-6 1-10 6-10 10"/>
+            </svg>
+          </div>
+          <h3>What We Grow</h3>
+          <p>Diverse crops for local tables:</p>
+          <ul>
+            <li>Vegetables: Tomatoes, greens, squash, peppers</li>
+            <li>Perennials: Blueberries, asparagus, rhubarb</li>
+            <li>Grains: Heirloom corn, oats, rye</li>
+            <li>Livestock: Lamb & pastured eggs</li>
+          </ul>
+        </div>
+        <div class="farm-card">
+          <div class="litho-icon">
+            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <path d="M14 44V30c0-6 4-10 10-10s10 4 10 10v14"/>
+              <circle cx="24" cy="12" r="8"/>
+              <path d="M8 44h32"/>
+            </svg>
+          </div>
+          <h3>Our Family</h3>
+          <p>Chuck and Laurel Cox built Tuckaway Farm starting in 1983. Now Dorn and Sarah continue the legacy, raising the next generation on the land.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Partners -->
+  <section class="partners" id="partners">
+    <div class="container">
+      <div class="partners-header">
+        <span class="section-label">Our Community</span>
+        <h2>Partners at the Commons</h2>
+        <p>Organizations working together to strengthen our local food system.</p>
+      </div>
+      <div class="partners-grid">
+        <div class="partner-card">
+          <h3>Seacoast Eat Local</h3>
+          <p>A 501c3 non-profit cultivating a resilient, equitable, and community-centered local food system through farmers markets, education, and collaboration.</p>
+          <a href="https://seacoasteatlocal.org/" class="partner-link" target="_blank">Visit Website →</a>
+        </div>
+        <div class="partner-card">
+          <h3>Zuri Wingi</h3>
+          <p>"Beautiful Abundance" — introducing community members to crops grown around the African Diaspora and by Indigenous communities, preserving cultural history.</p>
+          <a href="#" class="partner-link">Learn More →</a>
+        </div>
+        <div class="partner-card">
+          <h3>Cultivate</h3>
+          <p>A non-profit promoting diversity and equity through events celebrating regional histories of culture and agriculture, including BIPOC Fest and Farm-a-Q.</p>
+          <a href="https://www.cultivatenewengland.com/" class="partner-link" target="_blank">Visit Website →</a>
+        </div>
+        <div class="partner-card">
+          <h3>Heritage Harvest Project</h3>
+          <p>Promoting regional heritage foods and agricultural diversity by strengthening connections between farmers, chefs, and local communities.</p>
+          <a href="https://heritageharvestproject.org/" class="partner-link" target="_blank">Visit Website →</a>
+        </div>
+        <div class="partner-card">
+          <h3>Vida Tortilla</h3>
+          <p>Producing NH-grown stone ground masa and fresh tortillas, based at Tuckaway Food Commons.</p>
+          <a href="https://vidatortilla.com/" class="partner-link" target="_blank">Visit Website →</a>
+        </div>
+        <div class="partner-card">
+          <h3>Seacoast Permaculture</h3>
+          <p>Empowering individuals and communities to create resiliency through permaculture in the NH Seacoast area.</p>
+          <a href="https://www.seacoastnhpermaculture.org/" class="partner-link" target="_blank">Visit Website →</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Rent Space - FIXED IMAGE RENDERING -->
+  <section class="spaces" id="spaces">
+    <div class="container">
+      <div class="spaces-header">
+        <span class="section-label">Host Your Event</span>
+        <h2>Share Our Spaces</h2>
+      </div>
+      <div class="spaces-grid">
+        <div class="space-card">
+          <img src="emerson-house.jpg" alt="The Emerson House interior" class="img-emerson" loading="lazy">
+          <div class="space-content">
+            <h3>The Emerson House</h3>
+            <p>A beautiful indoor/outdoor setting for meetings, retreats, workshops, and private events in a historic c. 1760 home.</p>
+            <ul class="space-features">
+              <li>ADA compliant, 36-person capacity</li>
+              <li>Two breakout rooms (10 each)</li>
+              <li>Kitchen access</li>
+              <li>A/V equipment included</li>
+              <li>Trails through fields & forest</li>
+            </ul>
+            <a href="#" class="btn">Inquire Now</a>
+          </div>
+        </div>
+        <div class="space-card">
+          <img src="farmaq.jpg" alt="Farm-a-Q outdoor event at Tuckaway Farm" class="img-farmaq" loading="lazy">
+          <div class="space-content">
+            <h3>Outdoor Event Spaces</h3>
+            <p>Field space for public and private outdoor events with capacity up to 500 guests.</p>
+            <ul class="space-features">
+              <li>Mowed field for parking & events</li>
+              <li>Electric outlets</li>
+              <li>Water access for cleanup</li>
+              <li>Beautiful farm backdrop</li>
+            </ul>
+            <a href="#" class="btn">Inquire Now</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Visit -->
+  <section class="visit" id="visit">
+    <div class="container">
+      <div class="visit-header">
+        <span class="section-label">Find Us</span>
+        <h2>Plan Your Visit</h2>
+      </div>
+      <div class="visit-grid">
+        <div class="visit-card">
+          <div class="litho-icon">
+            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <path d="M24 4C16 4 10 10 10 18c0 10 14 26 14 26s14-16 14-26c0-8-6-14-14-14z"/>
+              <circle cx="24" cy="18" r="6"/>
+            </svg>
+          </div>
+          <h3>Location</h3>
+          <p>
+            <strong>Farm Store & Emerson House</strong><br>
+            4 Captain Smith Emerson Rd.<br><br>
+            <strong>Farm/Mailing Address</strong><br>
+            36 Captain Smith Emerson Rd.<br>
+            Lee, NH
+          </p>
+        </div>
+        <div class="visit-card">
+          <div class="litho-icon">
+            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="24" cy="24" r="20"/>
+              <path d="M24 12v14l8 8"/>
+            </svg>
+          </div>
+          <h3>Hours</h3>
+          <p>
+            <strong>Member Hours</strong><br>
+            Daily 8am – 7pm<br><br>
+            <strong>Public Hours</strong><br>
+            Fridays 10am – 6pm
+          </p>
+        </div>
+        <div class="visit-card">
+          <div class="litho-icon">
+            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <path d="M44 34c0 6-4 10-10 10H14c-6 0-10-4-10-10V14c0-6 4-10 10-10h20c6 0 10 4 10 10v20z"/>
+              <path d="M14 18l10 8 10-8"/>
+              <path d="M14 18v12h20V18"/>
+            </svg>
+          </div>
+          <h3>Contact</h3>
+          <p>
+            <strong>Phone</strong><br>
+            +1 (603) 988-5065<br><br>
+            3 miles from UNH<br>
+            15 miles from Portsmouth
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Get Involved -->
+  <section class="involve" id="involve">
+    <div class="container">
+      <div class="involve-header">
+        <span class="section-label">Join Us</span>
+        <h2>Get Involved</h2>
+      </div>
+      <div class="involve-grid">
+        <div class="involve-card">
+          <div class="litho-icon">
+            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <path d="M16 20c-4 0-8 4-8 8v12h16V28c0-4-4-8-8-8z"/>
+              <circle cx="16" cy="12" r="6"/>
+              <path d="M32 20c-4 0-8 4-8 8v12h16V28c0-4-4-8-8-8z"/>
+              <circle cx="32" cy="12" r="6"/>
+            </svg>
+          </div>
+          <h3>Volunteer</h3>
+          <p>Help maintain gardens, assist at events, and support the farm's mission.</p>
+          <a href="#" class="btn">Learn More</a>
+        </div>
+        <div class="involve-card">
+          <div class="litho-icon">
+            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <path d="M24 4c-8 0-14 6-14 14 0 12 14 26 14 26s14-14 14-26c0-8-6-14-14-14z"/>
+              <path d="M24 12c-3 0-5 3-5 6 0 5 5 10 5 10s5-5 5-10c0-3-2-6-5-6z"/>
+            </svg>
+          </div>
+          <h3>Donate</h3>
+          <p>Support programs for food access, education, and sustainable agriculture.</p>
+          <a href="#" class="btn">Give Today</a>
+        </div>
+        <div class="involve-card">
+          <div class="litho-icon">
+            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <path d="M24 4l6 12 14 2-10 10 2 14-12-6-12 6 2-14L4 18l14-2z"/>
+            </svg>
+          </div>
+          <h3>Sponsor</h3>
+          <p>Partner with us to strengthen the local food system and build community.</p>
+          <a href="#" class="btn">Become a Sponsor</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Farm Management Integration Notice -->
+  <div class="integration-notice">
+    <div class="container">
+      <p>PART OF THE <a href="#">FARM HACK</a> OPEN SOURCE FARM MANAGEMENT ECOSYSTEM</p>
+    </div>
+  </div>
+
+  <!-- Compact Footer with TEXT LOGO -->
+  <footer>
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-logo">
+          <span class="logo-main">Tuckaway</span>
+          <span class="logo-sub">Food Commons</span>
+        </div>
+        <ul class="footer-nav">
+          <li><a href="#about">About</a></li>
+          <li><a href="#store">Store</a></li>
+          <li><a href="#farm">Farm</a></li>
+          <li><a href="#events">Events</a></li>
+          <li><a href="#spaces">Spaces</a></li>
+          <li><a href="#partners">Partners</a></li>
+          <li><a href="#visit">Visit</a></li>
+        </ul>
+        <div class="footer-legal">
+          <span>© 2026</span>
+          <a href="#">Privacy</a>
+          <a href="#">Terms</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Navigation scroll effect
+    const nav = document.getElementById('nav');
+    window.addEventListener('scroll', () => {
+      nav.classList.toggle('scrolled', window.pageYOffset > 100);
+    });
+
+    // Smooth scroll for anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          const headerOffset = 80;
+          const elementPosition = target.getBoundingClientRect().top;
+          const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+          window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+        }
+      });
+    });
+
+    // Fade-in animations
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) entry.target.classList.add('visible');
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -60px 0px' });
+
+    document.querySelectorAll('.intro-card, .event-card, .partner-card, .farm-card, .space-card, .involve-card').forEach((el, i) => {
+      el.style.cssText = `opacity:0;transform:translateY(30px);transition:opacity 0.6s ease ${i%4*0.1}s,transform 0.6s ease ${i%4*0.1}s`;
+      observer.observe(el);
+    });
+
+    const style = document.createElement('style');
+    style.textContent = '.visible{opacity:1!important;transform:translateY(0)!important}';
+    document.head.appendChild(style);
+  </script>
+
+</body>
+</html>
